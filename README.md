@@ -1,13 +1,24 @@
 
 ## Remote Lua Loader
 
-Remote lua loader for PS4 and PS5, based on gezine's [finding](https://github.com/Gezine/ArtemisLuaLoader/) that allows games built with Artemis engine to load arbitrary lua file. Currently this loader is specific for Raspberry Cube (CUSA16074). The loader is not firmware dependant, and has been successfully tested on PS5 Pro 10.20.
+Remote lua loader for PS4 and PS5, based on gezine's [finding](https://github.com/Gezine/ArtemisLuaLoader/) that allows games built with Artemis engine to load arbitrary lua file. The loader is not firmware dependant, and has been successfully tested on PS5 Pro 10.20.  
+Currently this loader is specific for the following list of games:
+1. Raspberry Cube (CUSA16074)
+2. Aibeya (CUSA17068)
+3. Hamidashi Creative (CUSA27389)
+4. Hamidashi Creative Demo (CUSA27390) - Requires latest firmware to download from PSN
+5. Aikagi Kimi to Issho ni Pack (CUSA16229)
+
+And the payloads:
+1. hello_world.lua - Prints basic information back from the game process - its process id, the base of the eboot, libc and libkernel.
+2. sigsegv_crash_trigger.lua - Triggers a SIGSEGV crash that should be signal handled without crashing the game process.
+3. notification_popup.lua - (Currently PS4-only) Triggers a notification popup with 'Hello World' on the PlayStation.
 
 ### Usage on jailbroken PS4 with disc version
 
 1. Play the game for a while until you can create save data
 2. Use Apollo Save Tool to export decrypted save data to USB drive
-3. Copy and paste all files from savedata into USB drive (x:\PS4\APOLLO\id_CUSA16074_savedata), overwriting currently existing save data
+3. Copy and paste all files from savedata into USB drive (x:\PS4\APOLLO\id_{YOUR_GAME_CUSA_ID}_savedata), overwriting currently existing save data
 4. Make sure that `PLATFORM` variable on top of inject.lua is set appropriately
 5. Use Apollo Save Tool to import the new save data from USB drive
 6. Run the game and check if there is a popup from lua loader
@@ -30,7 +41,7 @@ If you have a jailbroken PS5 with a non activated account, you can use OffAct fr
 4. Connect a USB disk to the PS4.
 5. Use Apollo Save Tool to export decrypted save data to USB drive.
 6. Make sure that PLATFORM variable on top of inject.lua is set appropriately
-7. Copy and paste all files from savedata into USB drive (x:\PS4\APOLLO\id_CUSA16074_savedata), overwriting currently existing save data.
+7. Copy and paste all files from savedata into USB drive (x:\PS4\APOLLO\id_{YOUR_GAME_CUSA_ID}_savedata), overwriting currently existing save data.
 8. Create new fake offline account.
 9. Use Apollo Save Tool to activate the new fake account using the converted hex account ID from step 2.
 10. Switch to the activated fake account.

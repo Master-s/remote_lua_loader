@@ -2,6 +2,7 @@
 import sys
 import socket
 import struct
+import binascii
 
 def send_payload(ip, port, filepath):
     
@@ -21,8 +22,15 @@ def send_payload(ip, port, filepath):
                 break
             response.append(chunk)
 
+            if len(chunk) == 8:
+                break
+
         response = b''.join(response)
-        print(response.decode("latin-1"))
+        if len(response) == 8:
+            crash_address = binascii.hexlify(bytes(reversed(response))).decode('utf-8')
+            print(f"SIGSEGV at 0x{crash_address}")
+        else:
+            print(response.decode("utf-8"))
 
 def main():
     
