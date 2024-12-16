@@ -5,8 +5,7 @@ function check_prerequisites()
 end
 
 function main()
-    memory.write_qword(0x0000424700004343, 0)
-    memory.write_qword(0x0000444800004949, 0)
+    memory.write_qword(0x4242424700004343, 0)
 end
 
 check_prerequisites()

