@@ -20,6 +20,8 @@ Currently this loader is specific for the following list of games:
 13. Fuyu Kiss Demo (CUSA29746)
 14. Nora Princess and Crying Cat 2 (CUSA13586)
 15. Haruoto Alice Gram Snow Drop (CUSA14324)
+16. Azayaka na Irodori no Naka de
+Kimi Rashiku (CUSA10679)
 
 For guide on how to setup this loader, please refer [SETUP.md](SETUP.md)
 
