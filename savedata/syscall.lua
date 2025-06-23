@@ -9,13 +9,11 @@ syscall = {}
 
 function syscall.init()
 
-    libkernel_base = resolve_base(
-        memory.read_qword(libc_addrofs.gettimeofday_import),
-        "libkernel.sprx", 5
-    )
+    syscall.collect_info()
 
     print("[+] libkernel base @ " .. hex(libkernel_base))
-    
+    print("[+] platform @ " .. PLATFORM)
+
     if PLATFORM == "ps4" then  -- ps4 requires valid syscall wrapper, which we can scrape from libkernel .text
         local libkernel_text = memory.read_buffer(libkernel_base, 0x40000)
         -- mov rax, <num>; mov r10, rcx; syscall
@@ -35,6 +33,37 @@ function syscall.init()
     syscall.do_sanity_check()
 end
 
+function syscall.collect_info()
+
+    -- ref: https://github.com/shadps4-emu/shadPS4/blob/0bdd21b4e49c25955b16a3651255381b4a60f538/src/core/module.h#L32
+    local INIT_PROC_ADDR_OFFSET = 0x128
+    local SEGMENTS_OFFSET = 0x160
+    
+    local sceKernelGetModuleInfoFromAddr = fcall(libc_addrofs.sceKernelGetModuleInfoFromAddr)
+    
+    local addr_inside_libkernel = memory.read_qword(libc_addrofs.gettimeofday_import)
+    local mod_info = memory.alloc(0x300)
+
+    local ret = sceKernelGetModuleInfoFromAddr(addr_inside_libkernel, 1, mod_info):tonumber()
+    if ret ~= 0 then
+        error("sceKernelGetModuleInfoFromAddr() error: " .. hex(ret))
+    end
+    
+    libkernel_base = memory.read_qword(mod_info + SEGMENTS_OFFSET)
+
+    -- credit to flatz for this technique
+    local init_proc_addr = memory.read_qword(mod_info + INIT_PROC_ADDR_OFFSET)
+    local delta = (init_proc_addr - libkernel_base):tonumber()
+    
+    if delta == 0x0 then
+        PLATFORM = "ps4"
+    elseif delta == 0x10 then
+        PLATFORM = "ps5"
+    else
+        error("failed to determine PLATFORM")
+    end
+end
+
 function syscall.resolve(list)
     for name, num in pairs(list) do
         if not syscall[name] then
@@ -42,7 +71,7 @@ function syscall.resolve(list)
                 if syscall.syscall_wrapper[num] then
                     syscall[name] = fcall(syscall.syscall_wrapper[num], num)
                 else
-                    printf("warning: syscall %s (%d) not found", name, num)
+                    errorf("syscall wrapper for %s (%d) not found in libkernel", name, num)
                 end
             elseif PLATFORM == "ps5" then
                 syscall[name] = fcall(syscall.syscall_address, num)
@@ -60,45 +89,5 @@ function syscall.do_sanity_check()
     local pid = syscall.getpid()
     if not (pid and pid.h == 0 and pid.l ~= 0) then
         error("syscall test failed")
-    end
-end
-
-
-
-
-function syscall_mmap(addr, size)
-
-    syscall.resolve({
-        mmap = 477,
-    })
-
-    local MAP_PRIVATE = 0x2
-    local MAP_FIXED = 0x10
-    local MAP_ANONYMOUS = 0x1000
-    local MAP_COMBINED = bit32.bor(MAP_PRIVATE, MAP_FIXED, MAP_ANONYMOUS)
-
-    local PROT_READ = 0x1
-    local PROT_WRITE = 0x2
-    local PROT_COMBINED = bit32.bor(PROT_READ, PROT_WRITE)
-
-    local ret = syscall.mmap(addr, size, PROT_COMBINED, MAP_COMBINED, -1 ,0)
-    if ret:tonumber() < 0 then
-        error("mmap() error: " .. get_error_string())
-    end
-
-    return ret
-end
-
-function syscall_sleep(second)
-
-    local nanosec = 100000000 * (second - math.floor(second))
-    second = math.floor(second)
-    
-    local timespec = memory.alloc(0x10)
-    memory.write_qword(timespec, second) -- tv_sec
-    memory.write_qword(timespec + 8, nanosec) -- tv_nsec
-
-    if syscall.nanosleep(timespec):tonumber() < 0 then
-        error("nanosleep() error: " .. get_error_string())
     end
 end

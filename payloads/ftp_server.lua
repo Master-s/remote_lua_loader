@@ -63,7 +63,7 @@ offsets = {
             gmtime = 0x3DA60,
             gmtime_s = 0x34790
         },
-        b = {
+        aikagi_2 = {
             time = 0xB2EF0,
             gmtime = 0x33800,
             gmtime_s = 0x2A480
@@ -88,11 +88,41 @@ offsets = {
             gmtime = 0x96D0,
             gmtime_s = 0x1640
         },
-        f = {
+        ixshe_tell = {
             time = 0xB4F00,
             gmtime = 0x3DA60,
             gmtime_s = 0x34790
-        }
+        },
+        nora_princess = {
+            time = 0x7FBB0,
+            gmtime = 0x9730,
+            gmtime_s = 0x1600
+        },
+        jinki_resurrection = {
+            time = 0xB0AB0,
+            gmtime = 0x32150,
+            gmtime_s = 0x28D80
+        },
+        fuyu_kiss = {
+            time = 0xAFD30,
+            gmtime = 0x31B00,
+            gmtime_s = 0x287A0
+        },
+        nora_princess2 = {
+            time = 0x7FBB0,
+            gmtime = 0x9730,
+            gmtime_s = 0x1600
+        },
+        f = {
+            time = 0xB2660,
+            gmtime = 0x33800,
+            gmtime_s = 0x2A480
+        },
+        snow_drop = {
+            time = 0x7FBB0,
+            gmtime = 0x9730,
+            gmtime_s = 0x1600
+        },
     }
 }
 
@@ -100,12 +130,23 @@ local add_offsets = {}
 function get_offsets(gamename)
     if gamename == "RaspberryCube" then add_offsets = offsets.libc.raspberry_cube end
     if gamename == "Aibeya" then add_offsets = offsets.libc.aibeya end
-    if gamename == "B" then add_offsets = offsets.libc.b end
+    if gamename == "Aikagi2" then add_offsets = offsets.libc.aikagi_2 end
     if gamename == "HamidashiCreative" then add_offsets = offsets.libc.hamidashi_creative end
     if gamename == "AikagiKimiIsshoniPack" then add_offsets = offsets.libc.aikagi_kimi_isshoni_pack end
     if gamename == "C" then add_offsets = offsets.libc.c end
     if gamename == "E" then add_offsets = offsets.libc.e end
+    if gamename == "IxSHETell" then add_offsets = offsets.libc.ixshe_tell end
+    if gamename == "NoraPrincess" then add_offsets = offsets.libc.nora_princess end
+    if gamename == "JinkiResurrection" then add_offsets = offsets.libc.jinki_resurrection end
+    if gamename == "FuyuKiss" then add_offsets = offsets.libc.fuyu_kiss end
+    if gamename == "NoraPrincess2" then add_offsets = offsets.libc.nora_princess2 end
     if gamename == "F" then add_offsets = offsets.libc.f end
+    if gamename == "SnowDrop" then add_offsets = offsets.libc.snow_drop end
+
+    -- check if offsets table is empty
+    if next(add_offsets) == nil then
+        error("libc game offsets for FTP server not found! Exiting")
+    end
 end
 
 function time(tloc)
@@ -153,33 +194,9 @@ function TIMESPEC_TV_SEC() return 0 end
 function TIMESPEC_TV_NANO() return 0x8 end
 -- freebsd sdk ![end]
 
-function sceKernelSendNotificationRequest(text)
-    local O_WRONLY = 1
-    local notify_buffer_size = 0xc30
-    local notify_buffer = memory.alloc(notify_buffer_size)
-    local icon_uri = "cxml://psnotification/tex_icon_system"
-
-    -- credits to OSM-Made for this one. @ https://github.com/OSM-Made/PS4-Notify
-    memory.write_dword(notify_buffer + 0, 0)                -- type
-    memory.write_dword(notify_buffer + 0x28, 0)             -- unk3
-    memory.write_dword(notify_buffer + 0x2C, 1)             -- use_icon_image_uri
-    memory.write_dword(notify_buffer + 0x10, -1)            -- target_id
-    memory.write_buffer(notify_buffer + 0x2D, text .. "\0") -- message
-    memory.write_buffer(notify_buffer + 0x42D, icon_uri)    -- uri
-
-    local notification_fd = syscall.open("/dev/notification0", O_WRONLY):tonumber()
-    if notification_fd < 0 then
-        error("open() error: " .. get_error_string())
-    end
-
-    syscall.write(notification_fd, notify_buffer, notify_buffer_size)
-
-    syscall.close(notification_fd)
-end
-
 function sceKernelSendDebug(text)
     if FTP_DEBUG_MSG == "on" then
-        sceKernelSendNotificationRequest(text)
+        send_ps_notification(text)
     end
 end
 
@@ -421,8 +438,6 @@ end
 
 function ftp_send_list()
     local st = memory.alloc(120)
-    local curtime = memory.alloc(4)
-    local curtm = memory.alloc(36)
 
     if sceStat(ftp.client.cur_path, st) < 0 then
         ftp_send_ctrl_msg(string.format("550 Invalid directory. Got %s\r\n", ftp.client.cur_path))
@@ -435,55 +450,54 @@ function ftp_send_list()
         return
     end
 
-    local contents = memory.alloc(512)
-    if sceGetdents(fd, contents, 512) < 0 then
-        sceClose(fd)
-        ftp_send_ctrl_msg(string.format("550 Invalid directory. Got %s\r\n", ftp.client.cur_path))
-        return
-    end
-
-    local months = { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"}
+    local contents = memory.alloc(4096)  -- bigger buffer, good
+    local months = { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" }
 
     ftp_send_ctrl_msg("150 Opening ASCII mode data transfer for LIST.\r\n")
     ftp_open_data_conn()
 
-    time(curtime)
-    gmtime_s(curtime, curtm)
-
-    local entry = contents
     while true do
-        local length = read_u8(entry + 0x4)
-        if length == 0 then break end
-        local name = memory.read_buffer(entry + 0x8, 64)
-        if name ~= '.' and name ~= '..' and name ~= '\0' then
-            local full_path = ftp.client.cur_path .. "/" .. name
-            if sceStat(full_path, st) >= 0 then
-                local file_mode = read_u16(st + 8)
-                local file_size = memory.read_qword(st + 72):tonumber()
-                
-                local tm = memory.alloc(36)
-                gmtime_s(st + 56, tm)
-                local n_hour = memory.read_dword(tm + 8)
-                local n_mins = memory.read_dword(tm + 4)
-                local n_mday = memory.read_dword(tm + 12)
-                local n_mon = memory.read_dword(tm + 16)
-                
-                -- mon + 1 because arrays starts at index 1 in lua.
-                ftp_send_data_msg(string.format("%s 1 ps4 ps4 %d %s %d %02d:%02d %s\r\n", 
-                    list_args(file_mode), 
-                    file_size, 
-                    months[n_mon:tonumber()+1], 
-                    n_mday:tonumber(), 
-                    n_hour:tonumber(), 
-                    n_mins:tonumber(), 
-                    name))
-            end
-        end
-        
-        entry = entry + length
-    end
-    sceClose(fd)
+        local nread = sceGetdents(fd, contents, 4096)
+        if nread <= 0 then break end
 
+        local entry = contents
+        local end_ptr = contents + nread
+
+        while entry < end_ptr do
+            local length = read_u8(entry + 0x4)
+            if length == 0 then break end
+
+            local name = memory.read_buffer(entry + 0x8, 64)
+
+            if name ~= '.' and name ~= '..' and name ~= '\0' then
+                local full_path = ftp.client.cur_path .. "/" .. name
+                if sceStat(full_path, st) >= 0 then
+                    local file_mode = read_u16(st + 8)
+                    local file_size = memory.read_qword(st + 72):tonumber()
+
+                    local tm = memory.alloc(36)
+                    gmtime_s(st + 56, tm)
+                    local n_hour = memory.read_dword(tm + 8)
+                    local n_mins = memory.read_dword(tm + 4)
+                    local n_mday = memory.read_dword(tm + 12)
+                    local n_mon = memory.read_dword(tm + 16)
+
+                    ftp_send_data_msg(string.format("%s 1 ps4 ps4 %d %s %d %02d:%02d %s\r\n",
+                        list_args(file_mode),
+                        file_size,
+                        months[n_mon:tonumber()+1],
+                        n_mday:tonumber(),
+                        n_hour:tonumber(),
+                        n_mins:tonumber(),
+                        name))
+                end
+            end
+
+            entry = entry + length
+        end
+    end
+
+    sceClose(fd)
     ftp_close_data_conn()
     ftp_send_ctrl_msg("226 Transfer complete\r\n")
 end
@@ -523,7 +537,7 @@ function ftp_send_pasv()
     sceNetGetsockname(ftp.client.data_sockfd, picked, namelen)
 
     local port = read_u16(picked + 2)
-    --sceKernelSendNotificationRequest("Port: " .. port)
+    --send_ps_notification("Port: " .. port)
 
     local cmd = string.format("227 Entering Passive Mode (%d,%d,%d,%d,%d,%d)\r\n", a, b, c, d, bit32.bor(bit32.rshift(port, 0), 0xFF), bit32.bor(bit32.rshift(port, 8), 0xFF))
     ftp_send_ctrl_msg(cmd)
@@ -923,7 +937,7 @@ local function cleanup_ftp()
     if ftp.client.data_sockfd then sceClose(ftp.client.data_sockfd) end
     if ftp.client.pasv_sockfd then sceClose(ftp.client.pasv_sockfd) end
     if ftp.server.server_sockfd then sceClose(ftp.server.server_sockfd) end
-    sceKernelSendNotificationRequest("FTP Server closed")
+    send_ps_notification("FTP Server closed")
 end
 
 function ftp_client_th()
@@ -949,10 +963,6 @@ end
 
 function ftp_init()
     get_offsets(game_name)
-
-    local f = io.open("/av_contents/content_tmp/ftp.txt", "w")
-    f:write("file created by ftp server.")
-    f:close()
 
     ftp.client.cur_path = ftp.client.root_path
     ftp.server.server_sockfd = sceNetSocket(AF_INET, SOCK_STREAM, 0)
@@ -985,7 +995,7 @@ function ftp_init()
         return
     end
 
-    sceKernelSendNotificationRequest("FTP Server listening on port " .. ftp.server.port)
+    send_ps_notification("FTP Server listening on port " .. ftp.server.port)
 
     while true do
         if not ftp.client.is_connected then

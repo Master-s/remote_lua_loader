@@ -1,11 +1,7 @@
 
-PLATFORM = "ps4"  -- ps4 or ps5
-FW_VERSION = nil
-
 options = {
     enable_signal_handler = true,
-    run_loader_with_gc_disabled = true,
-    run_payload_in_new_thread = true,
+    run_loader_with_gc_disabled = false,
 }
 
 WRITABLE_PATH = "/av_contents/content_tmp/"
@@ -24,19 +20,30 @@ libc_addrofs = nil
 native_cmd_handler = nil
 native_invoke = nil
 
+kernel_offset = nil
+
 old_print = print
 function print(...)
+    
     local out = prepare_arguments(...) .. "\n"
-    old_print(out)
-    log_fd:write(out)
+    
+    old_print(out) -- print to stdout
+
+    if client_fd and native_invoke then
+        syscall.write(client_fd, out, #out) -- print to socket
+    end
+
+    log_fd:write(out) -- print to file
     log_fd:flush()
 end
 
 package.path = package.path .. ";/savedata0/?.lua"
 
+require "globals"
 require "offsets"
 require "misc"
 require "bit32"
+require "hash"
 require "uint64"
 require "struct"
 require "lua"
@@ -46,8 +53,13 @@ require "syscall"
 require "signal"
 require "native"
 require "thread"
+require "kernel_offset"
+require "kernel"
+require "gpu"
 
-function run_lua_code(lua_code, client_fd)
+function run_lua_code(lua_code)
+
+    assert(client_fd)
 
     local script, err = loadstring(lua_code)
     if err then
@@ -64,8 +76,7 @@ function run_lua_code(lua_code, client_fd)
         printf = function(fmt, ...)
             local out = string.format(fmt, ...) .. "\n"
             syscall.write(client_fd, out, #out)
-        end,
-        client_fd = client_fd,
+        end
     }
 
     setmetatable(env, { __index = _G })
@@ -82,13 +93,6 @@ end
 function remote_lua_loader(port)
 
     assert(port)
-
-    local AF_INET = 2
-    local SOCK_STREAM = 1
-    local INADDR_ANY = 0
-
-    local SOL_SOCKET = 0xffff  -- options for socket level
-    local SO_REUSEADDR = 4  -- allow local address reuse
 
     local enable = memory.alloc(4)
     local sockaddr_in = memory.alloc(16)
@@ -109,10 +113,8 @@ function remote_lua_loader(port)
         error("setsockopt() error: " .. get_error_string())
     end
 
-    local htons = function(x)
-        local high = math.floor(x / 256) % 256
-        local low = x % 256
-        return low * 256 + high
+    local function htons(port)
+        return bit32.bor(bit32.lshift(port, 8), bit32.rshift(port, 8)) % 0x10000
     end
 
     memory.write_byte(sockaddr_in + 1, AF_INET)
@@ -135,15 +137,48 @@ function remote_lua_loader(port)
         print("[+] waiting for new connection...")
         
         memory.write_dword(addrlen, 16)
-        local client_fd = syscall.accept(sock_fd, sockaddr_in, addrlen):tonumber()  
-        if client_fd < 0 then
-            error("accept() error: " .. get_error_string())
+
+        client_fd = syscall.accept(sock_fd, sockaddr_in, addrlen):tonumber()  
+        
+        -- need to reinit the socket after rest mode
+        while client_fd < 0 do
+            print("accept() error: " .. get_error_string())
+            
+            syscall.close(sock_fd)
+            
+            sock_fd = syscall.socket(AF_INET, SOCK_STREAM, 0):tonumber()
+            if sock_fd < 0 then
+                error("socket() error: " .. get_error_string())
+            end
+
+            memory.write_dword(enable, 1)
+            if syscall.setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, enable, 4):tonumber() < 0 then
+                error("setsockopt() error: " .. get_error_string())
+            end
+
+            memory.write_byte(sockaddr_in + 1, AF_INET)
+            memory.write_word(sockaddr_in + 2, htons(port))
+            memory.write_dword(sockaddr_in + 4, INADDR_ANY)
+
+            if syscall.bind(sock_fd, sockaddr_in, 16):tonumber() < 0 then
+                error("bind() error: " .. get_error_string())
+            end
+         
+            if syscall.listen(sock_fd, 3):tonumber() < 0 then
+                error("listen() error: " .. get_error_string())
+            end
+            
+            print("[+] waiting for new connection...")
+            
+            memory.write_dword(addrlen, 16)
+
+            client_fd = syscall.accept(sock_fd, sockaddr_in, addrlen):tonumber()  
         end
  
         syscall.read(client_fd, tmp, 8)
         local size = memory.read_qword(tmp):tonumber()
         
-        printf("[+] accepted new connection client fd %d", client_fd)
+        -- printf("[+] accepted new connection client fd %d", client_fd)
 
         if size > 0 and size < maxsize then
             
@@ -161,33 +196,29 @@ function remote_lua_loader(port)
             
             local lua_code = memory.read_buffer(buf, size)
 
-            printf("[+] accepted lua code with size %d (%s)", #lua_code, hex(#lua_code))
+            -- printf("[+] accepted lua code with size %d (%s)", #lua_code, hex(#lua_code))
             
             if options.enable_signal_handler then
                 signal.set_sink_fd(client_fd)
             end
 
-            if options.run_payload_in_new_thread then
-                run_lua_code_in_new_thread(lua_code, {
-                    client_fd = client_fd,
-                    close_socket_after_finished = true,
-                })
-            else
-                run_lua_code(lua_code, client_fd)
-                syscall.close(client_fd)
-            end
+            run_lua_code(lua_code)
+            syscall.close(client_fd)
+            
         elseif size == command_magic then
             local command_tmp = memory.alloc(4)
             syscall.read(client_fd, command_tmp, 1)
             local command = memory.read_dword(command_tmp):tonumber()
             
             if command == 0 then
-                options.run_payload_in_new_thread = false
-                local msg = "command: Disabled running payload in thread option"
+                signal.clear()
+                options.enable_signal_handler = false
+                local msg = "command: Disabled signal handler"
                 syscall.write(client_fd, msg, #msg)
             elseif command == 1 then
-                options.run_payload_in_new_thread = true
-                local msg = "command: Enabled running payload in thread option"
+                signal.register()
+                options.enable_signal_handler = true
+                local msg = "command: Enabled signal handler"
                 syscall.write(client_fd, msg, #msg)
             else
                 local err = string.format("error: invalid command %d\n", command)
@@ -201,6 +232,14 @@ function remote_lua_loader(port)
             syscall.write(client_fd, err, #err)
             syscall.close(client_fd)
         end
+
+        client_fd = nil
+
+        -- init kernel r/w class if exploit state exists
+        if not kernel.rw_initialized then
+            initialize_kernel_rw()
+        end
+
     end
 
     syscall.close(sock_fd)
@@ -215,35 +254,49 @@ function main()
     syscall.init()
     print("[+] syscall initialized")
 
-    native.init()
+    native.register()
     print("[+] native handler registered")
 
     print("[+] arbitrary r/w primitives achieved")
 
-    -- resolve required syscalls for remote lua loader 
+    -- resolve required syscalls for remote lua loader
+    -- note: syscall resolved here will also be available in the payloads
     syscall.resolve({
-        read = 3,
-        write = 4,
-        close = 6,
-        accept = 30,
-        socket = 97,
-        bind = 104,
-        setsockopt = 105,
-        listen = 106,
-        sysctl = 202,
-        nanosleep = 240,
-        sigaction = 416,
+        read = 0x3,
+        write = 0x4,
+        open = 0x5,
+        close = 0x6,
+        getuid = 0x18,
+        accept = 0x1e,
+        pipe = 0x2a,
+        mprotect = 0x4a,
+        socket = 0x61,
+        connect = 0x62,
+        bind = 0x68,
+        setsockopt = 0x69,
+        listen = 0x6a,
+        getsockopt = 0x76,
+        sysctl = 0xca,
+        nanosleep = 0xf0,
+        sigaction = 0x1a0,
+        thr_self = 0x1b0,
+        dlsym = 0x24f,
+        dynlib_load_prx = 0x252,
+        dynlib_unload_prx = 0x253,
+        is_in_sandbox = 0x249,
     })
 
     -- setup signal handler
     if options.enable_signal_handler then
-        signal.init()
+        signal.register()
         print("[+] signal handler registered")
     end
 
     FW_VERSION = get_version()
 
     thread.init()
+
+    kernel_offset = get_kernel_offset()
 
     local run_loader = function()
         local port = 9026

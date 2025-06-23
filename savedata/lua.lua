@@ -102,10 +102,13 @@ function lua.create_str_hacky(data)
     return str, addr
 end
 
+str_hacky_list = {}
+
 function lua.create_str(str)
     local addr = lua.addrof(str)
     if not addr then
         str, addr = lua.create_str_hacky(str)
+        table.insert(str_hacky_list, str)  -- prevent gc from freeing hacky str too soon
     end
     return str, addr+24
 end
@@ -129,15 +132,19 @@ function lua.setup_better_read_primitive()
     local new_fake_str_addr = eboot_addrofs.fake_string
 
     -- if current fake str is already behind eboot segment, then do nothing
-    if new_fake_str_addr > lua.fake_str_addr then return end
+    if new_fake_str_addr > lua.fake_str_addr then
+        return
+    end
 
     lua.fake_str = lua.fakeobj(new_fake_str_addr, lua_types.LUA_TSTRING)
     lua.fake_str_addr = new_fake_str_addr
 end
 
 function lua.resolve_game(luaB_auxwrap)
+    
     print("[+] luaB_auxwrap @ " .. hex(luaB_auxwrap))
-    local nibbles = luaB_auxwrap:band(uint64(0xfff)):tonumber()
+
+    local nibbles = bit64.band(luaB_auxwrap, 0xfff):tonumber()
     print("[+] luaB_auxwrap nibbles: " .. hex(nibbles))
     
     game_name = games_identification[nibbles]
@@ -156,11 +163,11 @@ function lua.resolve_game(luaB_auxwrap)
         eboot_addrofs = gadget_table.aibeya.eboot_addrofs
         libc_addrofs = gadget_table.aibeya.libc_addrofs
         gadgets = gadget_table.aibeya.gadgets
-    elseif game_name == "B" then
-        print("[+] Game identified as B")
-        eboot_addrofs = gadget_table.b.eboot_addrofs
-        libc_addrofs = gadget_table.b.libc_addrofs
-        gadgets = gadget_table.b.gadgets
+    elseif game_name == "Aikagi2" then
+        print("[+] Game identified as Aikagi 2")
+        eboot_addrofs = gadget_table.aikagi_2.eboot_addrofs
+        libc_addrofs = gadget_table.aikagi_2.libc_addrofs
+        gadgets = gadget_table.aikagi_2.gadgets
     elseif game_name == "HamidashiCreative" then
         print("[+] Game identified as Hamidashi Creative")
         eboot_addrofs = gadget_table.hamidashi_creative.eboot_addrofs
@@ -181,11 +188,56 @@ function lua.resolve_game(luaB_auxwrap)
         eboot_addrofs = gadget_table.e.eboot_addrofs
         libc_addrofs = gadget_table.e.libc_addrofs
         gadgets = gadget_table.e.gadgets
-    elseif game_name == "F" then -- TODO: Test
+    elseif game_name == "IxSHETell" then
+        print("[+] Game identified as IxSHE Tell")
+        eboot_addrofs = gadget_table.ixshe_tell.eboot_addrofs
+        libc_addrofs = gadget_table.ixshe_tell.libc_addrofs
+        gadgets = gadget_table.ixshe_tell.gadgets
+    elseif game_name == "NoraPrincess" then
+        print("[+] Game identified as CUSA13303 Nora Princess and Stray Cat Heart HD")
+        eboot_addrofs = gadget_table.nora_princess.eboot_addrofs
+        libc_addrofs = gadget_table.nora_princess.libc_addrofs
+        gadgets = gadget_table.nora_princess.gadgets
+    elseif game_name == "JinkiResurrection" then
+        print("[+] Game identified as Jinki Resurrection")
+        eboot_addrofs = gadget_table.jinki_resurrection.eboot_addrofs
+        libc_addrofs = gadget_table.jinki_resurrection.libc_addrofs
+        gadgets = gadget_table.jinki_resurrection.gadgets
+    elseif game_name == "FuyuKiss" then
+        print("[+] Game identified as Fuyu Kiss")
+        eboot_addrofs = gadget_table.fuyu_kiss.eboot_addrofs
+        libc_addrofs = gadget_table.fuyu_kiss.libc_addrofs
+        gadgets = gadget_table.fuyu_kiss.gadgets
+    elseif game_name == "NoraPrincess2" then
+        print("[+] Game identified as CUSA13586 Nora Princess and Crying Cat")
+        eboot_addrofs = gadget_table.nora_princess2.eboot_addrofs
+        libc_addrofs = gadget_table.nora_princess2.libc_addrofs
+        gadgets = gadget_table.nora_princess2.gadgets
+    elseif game_name == "F" then
         print("[+] Game identified as F")
         eboot_addrofs = gadget_table.f.eboot_addrofs
         libc_addrofs = gadget_table.f.libc_addrofs
         gadgets = gadget_table.f.gadgets
+    elseif game_name == "SnowDrop" then
+        print("[+] Game identified as Snow Drop")
+        eboot_addrofs = gadget_table.snow_drop.eboot_addrofs
+        libc_addrofs = gadget_table.snow_drop.libc_addrofs
+        gadgets = gadget_table.snow_drop.gadgets
+    elseif game_name == "Azayaka" then
+        print("[+] Game identified as Azayaka")
+        eboot_addrofs = gadget_table.azayaka.eboot_addrofs
+        libc_addrofs = gadget_table.azayaka.libc_addrofs
+        gadgets = gadget_table.azayaka.gadgets
+    end
+end
+
+function lua.resolve_libc_clash_game_by_name(game_name)
+    if game_name == "Aikagi2" then
+        print("[+] Game reidentified as Aikagi 2")
+        libc_addrofs = gadget_table.aikagi_2.libc_addrofs
+    elseif game_name == "F" then
+        print("[+] Game reidentified as F")
+        libc_addrofs = gadget_table.f.libc_addrofs
     end
 end
 
@@ -215,6 +267,7 @@ function lua.resolve_address()
     lua.resolve_game(luaB_auxwrap)
     
     eboot_base = luaB_auxwrap - eboot_addrofs.luaB_auxwrap
+
     print("[+] eboot base @ " .. hex(eboot_base))
 
     -- resolve offsets to their address
@@ -225,7 +278,7 @@ function lua.resolve_address()
                 local info = {}
                 info.gadget_addr = eboot_base + offset
                 info.pivot_addr = uint64(name:match("(0x%x+)"))
-                info.pivot_base = info.pivot_addr:band(uint64(0xfff):bnot())
+                info.pivot_base = bit64.band(info.pivot_addr, bit64.bnot(0xfff))
                 table.insert(list, info)
             end
             gadgets[k] = list
@@ -237,14 +290,31 @@ function lua.resolve_address()
     for k,offset in pairs(eboot_addrofs) do 
         eboot_addrofs[k] = eboot_base + offset 
     end
-
+	
     -- setup fake string that can read more memory space
     lua.setup_better_read_primitive()
 
     -- resolve libc
-    libc_base = memory.read_qword(eboot_addrofs.longjmp_import) - libc_addrofs.longjmp
+    libc_base = memory.read_qword(eboot_addrofs.strerror_import) - libc_addrofs.strerror
     print("[+] libc base @ " .. hex(libc_base))
-    
+
+    -- calculate libc hash, can be changed to hashing higher addresses if needed later.
+    local byte_array = memory.read_buffer(libc_base, 0xFF)
+    local hash = crc32(byte_array)
+    print("[+] libc hash @ " .. hex(hash))
+
+    -- resolve clashes if any
+    if libc_addrofs.clash and libc_addrofs.clash == 0x1 then
+        print("[+] detected clash, resolving...")
+        local orig_game_name = game_name
+        game_name = libc_identification[hash]
+        if game_name then
+            lua.resolve_libc_clash_game_by_name(game_name)
+        else
+            errorf("unsupported game (libc hash: %s for parent %s)", hex(hash), orig_game_name)
+        end
+    end
+
     for k,offset in pairs(libc_addrofs) do 
         libc_addrofs[k] = libc_base + offset 
     end
@@ -317,20 +387,6 @@ function lua.read_buffer(addr, size)
     return rel_addr >= 0 and lua.fake_str:sub(rel_addr, rel_addr + size - 1) or nil 
 end
 
-function lua.read_qword(addr)
-    local value = lua.read_buffer(addr, 8)
-    return value and #value == 8 and uint64.unpack(value) or nil 
-end
-
-function lua.read_multiple_qwords(addr, count)
-    local qwords = {}
-    local buffer = lua.read_buffer(addr, count*8)
-    for i=0,(#buffer/8)-1 do
-        table.insert(qwords, uint64.unpack(buffer:sub(i*8+1, i*8+8)))
-    end
-    return qwords
-end
-
 -- write 8 bytes (double) at target address with 4 bytes corruption after addr+8
 function lua.write_double(addr, value)
     local fake_upval = ub8(0x0) .. ub8(0x0) .. ub8(addr)  -- next + tt/marked + addr to tvalue
@@ -340,16 +396,22 @@ end
 
 -- write 8 bytes (qword) at target address with 5 bytes corruption after addr+8
 function lua.write_qword(addr, value)
-    local setbit = uint64(1):lshift(56)
+    local setbit = bit64.lshift(1, 56)
     value = uint64(value)
     lua.write_double(addr, struct.unpack("<d", ub8(value + setbit)))
-    lua.write_double(addr+1, struct.unpack("<d", ub8(value:rshift(8) + setbit)))
+    lua.write_double(addr+1, struct.unpack("<d", ub8(bit64.rshift(value, 8) + setbit)))
 end
 
 function lua.create_fake_cclosure(addr)
+    
     -- next + tt/marked/isC/nupvalues/hole + gclist + env + f
     local fake_cclosure = ub8(0) .. "\6\0\1\0\0\0\0\0" .. ub8(0) .. ub8(0) .. ub8(addr)
-    return lua.fakeobj(lua.resolve_value(fake_cclosure), lua_types.LUA_TFUNCTION)
+
+    -- create a copy so gc wont freed the memory backing of the object
+    local mem = memory.alloc(#fake_cclosure)
+    memory.memcpy(mem, lua.resolve_value(fake_cclosure), #fake_cclosure)
+
+    return lua.fakeobj(mem, lua_types.LUA_TFUNCTION)
 end
 
 
@@ -361,7 +423,7 @@ end
 
 bump = {}
 
-bump.pool_size = 5 * 1024 * 1024  -- 5mb
+bump.pool_size = 512 * 1024  -- 512 kb
 
 function bump.init()
     local padding = align_16(24) -- offset to data

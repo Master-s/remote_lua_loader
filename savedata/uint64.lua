@@ -33,7 +33,7 @@ function hex(v)
     elseif type(v) == "number" then
         return string.format("0x%x", v)
     else
-        errorf("hex: unknown type (%s)", type(v))
+        errorf("hex: unknown type (%s) for value %s", type(v), tostring(v))
     end
 end
 
@@ -48,13 +48,17 @@ function uint64:new(v)
     elseif type(v) == "string" then
         if v:sub(1, 2):lower() == "0x" then  -- init from hexstring
             v = v:sub(3):gsub("^0+", ""):upper()
-            assert(#v <= 16, string.format("uint64:new: hex string too long for uint64 (%s)", v))
+            if #v > 16 then
+                errorf("uint64:new: hex string too long for uint64 (%s)", v)
+            end
             v = string.rep("0", 16 - #v) .. v  -- pad with leading zeros
             self.h = tonumber(v:sub(1, 8), 16) or 0
             self.l = tonumber(v:sub(9, 16), 16) or 0
         else
             local num = tonumber(v)  -- assume its normal number
-            assert(num, string.format("uint64:new: invalid decimal string for uint64 (%s)", v))
+            if not num then
+                errorf("uint64:new: invalid decimal string for uint64 (%s)", v)
+            end
             self.h, self.l = math.floor(num / 2^32), num % 2^32
         end
     else
@@ -78,27 +82,20 @@ function uint64:tonumber()
 end
 
 function uint64:pack()
-    return string.char(
-        self.l % 256,
-        bit32.rshift(self.l, 8) % 256,
-        bit32.rshift(self.l, 16) % 256,
-        bit32.rshift(self.l, 24) % 256,
-        self.h % 256,
-        bit32.rshift(self.h, 8) % 256,
-        bit32.rshift(self.h, 16) % 256,
-        bit32.rshift(self.h, 24) % 256
-    )
+    return struct.pack("<I", self.l) .. struct.pack("<I", self.h)
 end
 
 function uint64.unpack(str)
-    if not (type(str) == "string" and #str == 8 or #str == 4) then
-        error("uint64.unpack: input string must be 8 or 4 length size")
+    if type(str) ~= "string" or #str > 8 then
+        error("uint64.unpack: input string must be 8 bytes length or lower")
     end
-    local l = str:byte(1) + bit32.lshift(str:byte(2), 8) 
-        + bit32.lshift(str:byte(3), 16) + bit32.lshift(str:byte(4), 24)
-    local h = #str == 8 and (str:byte(5) + bit32.lshift(str:byte(6), 8) 
-        + bit32.lshift(str:byte(7), 16) + bit32.lshift(str:byte(8), 24)) or 0
-    return uint64({h = h, l = l})
+    if #str < 8 then
+        str = str .. string.rep('\0', 8 - #str)
+    end
+    return uint64({
+        h = struct.unpack("<I", str:sub(5,8)),
+        l = struct.unpack("<I", str:sub(1,4))
+    })
 end
 
 -- note: comparison ops only work if both are same type
@@ -132,79 +129,151 @@ function uint64:__sub(v)
     return uint64({h = (h + 2^32) % 2^32, l = (l + 2^32) % 2^32})
 end
 
+function full_product32(a, b)
+    local al, ah = a % 2^16, math.floor(a / 2^16)
+    local bl, bh = b % 2^16, math.floor(b / 2^16)
+    -- products of 16-bit parts (each fits in < 2^32)
+    local p0 = al * bl -- 0-31 bits
+    local p1 = al * bh -- 16-47 bits
+    local p2 = ah * bl -- 16-47 bits
+    local p3 = ah * bh -- 32-63 bits
+    local mid = math.floor(p0 / 2^16) + p1 + p2
+    local low = (p0 % 2^16) + (mid % 2^16) * 2^16
+    local high = p3 + math.floor(mid / 2^16)
+    return high, low
+end
+
 function uint64:__mul(v)
     v = uint64(v)
     local ah, al, bh, bl = self.h, self.l, v.h, v.l
-    local h = ah * bl + al * bh
-    local l = al * bl
-    return uint64({h = (h + bit32.rshift(l, 32)) % 2^32, l = l % 2^32})
+    local p0_h, p0_l = full_product32(al, bl)
+    local _, p1_l = full_product32(al, bh)
+    local _, p2_l = full_product32(ah, bl)
+    local low = p0_l
+    local high = (p0_h + p1_l + p2_l) % 2^32
+    return uint64({h = high, l = low})
 end
 
 function uint64:divmod(v)
     v = uint64(v)
-    if v.h == 0 and v.l == 0 then error("division by zero") end
+    if v.h == 0 and v.l == 0 then
+        error("division by zero")
+    end
     local q, r = uint64(0), uint64(0)
     for i = 63, 0, -1 do
-        r = r:lshift(1)
+        r = bit64.lshift(r, 1)
         if bit32.rshift(self.h, i % 32) % 2 == 1 or (i < 32 and bit32.rshift(self.l, i) % 2 == 1) then
             r = r + 1
         end
         if r >= v then
             r = r - v
-            q = q + uint64(1):lshift(i)
+            q = q + bit64.lshift(1, i)
         end
     end
     return q, r
 end
 
-function uint64:__div(v) return select(1, self:divmod(v)) end
-function uint64:__mod(v) return select(2, self:divmod(v)) end
+function uint64:__div(v)
+    local q, _ = self:divmod(v)
+    return q
+end
 
-function uint64:lshift(n)
-    if n >= 64 then return uint64(0) end
-    if n >= 32 then
-        return uint64({h = bit32.lshift(self.l, n - 32), l = 0})
+function uint64:__mod(v)
+    local _, r = self:divmod(v)
+    return r
+end
+
+
+--
+-- bitwise operations for uint64 class
+--
+
+bit64 = {}
+
+function bit64.lshift(x, s_amount)
+    
+    x = uint64(x)
+
+    if s_amount >= 64 then
+        return uint64(0)
+    elseif s_amount >= 32 then
+        return uint64({h = bit32.lshift(x.l, s_amount - 32), l = 0})
     else
-        local h = bit32.bor(bit32.lshift(self.h, n), bit32.rshift(self.l, 32 - n))
-        local l = bit32.lshift(self.l, n)
+        local h = bit32.bor(bit32.lshift(x.h, s_amount), bit32.rshift(x.l, 32 - s_amount))
+        local l = bit32.lshift(x.l, s_amount)
         return uint64({h = h, l = l})
     end
 end
 
-function uint64:rshift(n)
-    if n >= 64 then return uint64(0) end
-    if n >= 32 then
-        return uint64({h = 0, l = bit32.rshift(self.h, n - 32)})
+function bit64.rshift(x, s_amount)
+
+    x = uint64(x)
+
+    if s_amount >= 64 then
+        return uint64(0)
+    elseif s_amount >= 32 then
+        return uint64({h = 0, l = bit32.rshift(x.h, s_amount - 32)})
     else
-        local h = bit32.rshift(self.h, n)
-        local l = bit32.bor(bit32.rshift(self.l, n), bit32.lshift(self.h % (2^n), 32 - n))
+        local h = bit32.rshift(x.h, s_amount)
+        local l = bit32.bor(bit32.rshift(x.l, s_amount), bit32.lshift(x.h % (2^s_amount), 32 - s_amount))
         return uint64({h = h, l = l})
     end
 end
 
-function uint64:bxor(v)
-    v = uint64(v)
-    local h = bit32.bxor(self.h, v.h)
-    local l = bit32.bxor(self.l, v.l)
-    return uint64({h = h, l = l})
+function bit64.bxor(...)
+
+    local args = {...}
+    local result = uint64(args[1]) or 0
+
+    for i = 2, #args do
+        local x = uint64(args[i])
+        result = uint64({
+            h = bit32.bxor(result.h, x.h),
+            l = bit32.bxor(result.l, x.l)
+        })
+    end
+
+    return result
 end
 
-function uint64:band(v)
-    v = uint64(v)
-    local h = bit32.band(self.h, v.h)
-    local l = bit32.band(self.l, v.l)
-    return uint64({h = h, l = l})
+function bit64.band(...)
+
+    local args = {...}
+    local result = uint64(args[1]) or 0
+
+    for i = 2, #args do
+        local x = uint64(args[i])
+        result = uint64({
+            h = bit32.band(result.h, x.h),
+            l = bit32.band(result.l, x.l)
+        })
+    end
+
+    return result
 end
 
-function uint64:bor(v)
-    v = uint64(v)
-    local h = bit32.bor(self.h, v.h)
-    local l = bit32.bor(self.l, v.l)
-    return uint64({h = h, l = l})
+function bit64.bor(...)
+
+    local args = {...}
+    local result = uint64(args[1]) or 0
+
+    for i = 2, #args do
+        local x = uint64(args[i])
+        result = uint64({
+            h = bit32.bor(result.h, x.h),
+            l = bit32.bor(result.l, x.l)
+        })
+    end
+
+    return result
 end
 
-function uint64:bnot()
-    local h = bit32.bnot(self.h)
-    local l = bit32.bnot(self.l)
-    return uint64({h = h, l = l})
+function bit64.bnot(x)
+    
+    x = uint64(x)
+
+    return uint64({
+        h = bit32.bnot(x.h),
+        l = bit32.bnot(x.l)
+    })
 end
