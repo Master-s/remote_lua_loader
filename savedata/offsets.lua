@@ -13,7 +13,7 @@ games_identification = {
     [0xb10] = "JinkiResurrection", -- CUSA25179
     [0x410] = "FuyuKiss",
     [0x2e0] = "NoraPrincess2",  -- CUSA13586 Nora Princess and Crying Cat 2
-    [0x070] = "SnowDrop" --CUSA14324
+    [0x070] = "SnowDrop", --CUSA14324
     [0xdc0] = "Azayaka"  -- CUSA10679 Azayaka na Irodori no Naka de Kimi Rashiku
 }
 
