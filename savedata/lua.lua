@@ -223,11 +223,16 @@ function lua.resolve_game(luaB_auxwrap)
         eboot_addrofs = gadget_table.snow_drop.eboot_addrofs
         libc_addrofs = gadget_table.snow_drop.libc_addrofs
         gadgets = gadget_table.snow_drop.gadgets
-    elseif game_name == "Azayaka" then
-        print("[+] Game identified as Azayaka")
-        eboot_addrofs = gadget_table.azayaka.eboot_addrofs
-        libc_addrofs = gadget_table.azayaka.libc_addrofs
-        gadgets = gadget_table.azayaka.gadgets
+    elseif game_name == "Mikagami" then
+        print("[+] Game identified as Mikagami Sumika no Seifuku Katsudou")
+        eboot_addrofs = gadget_table.mikagami.eboot_addrofs
+        libc_addrofs = gadget_table.mikagami.libc_addrofs
+        gadgets = gadget_table.mikagami.gadgets		
+    elseif game_name == "SummerSurprise" then
+        print("[+] Game identified as Tonari ni Kanojo no Iru Shiawase Summer Surprise")
+        eboot_addrofs = gadget_table.summer_surprise.eboot_addrofs
+        libc_addrofs = gadget_table.summer_surprise.libc_addrofs
+        gadgets = gadget_table.summer_surprise.gadgets
     end
 end
 
