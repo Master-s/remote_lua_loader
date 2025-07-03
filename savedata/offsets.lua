@@ -13,9 +13,9 @@ games_identification = {
     [0xb10] = "JinkiResurrection", -- CUSA25179
     [0x410] = "FuyuKiss",
     [0x2e0] = "NoraPrincess2",  -- CUSA13586 Nora Princess and Crying Cat 2
-    [0x070] = "SnowDrop" --CUSA14324
-	[0x560] = "Mikagami",		-- CUSA11481 Mikagami Sumika no Seifuku Katsudou
-	[0x170] = "SummerSurprise",
+    [0x070] = "SnowDrop", --CUSA14324
+    [0x560] = "Mikagami",		-- CUSA11481 Mikagami Sumika no Seifuku Katsudou
+    [0x170] = "SummerSurprise"
 }
 
 --[[
