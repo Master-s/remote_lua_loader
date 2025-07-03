@@ -138,7 +138,7 @@ function remote_lua_loader(port)
         network_str = string.format("port %d", port)
     end
 
-    notify(string.format("Remote Lua Loader\nrunning on %s %s\nlistening on %s",
+    notify(string.format("remote lua loader\nrunning on %s %s\nlistening on %s",
         PLATFORM, FW_VERSION, network_str))
 
     while true do

@@ -14,8 +14,7 @@ games_identification = {
     [0x410] = "FuyuKiss",
     [0x2e0] = "NoraPrincess2",  -- CUSA13586 Nora Princess and Crying Cat 2
     [0x070] = "SnowDrop", --CUSA14324
-    [0x560] = "Mikagami",		-- CUSA11481 Mikagami Sumika no Seifuku Katsudou
-    [0x170] = "SummerSurprise"
+    [0xdc0] = "Azayaka"  -- CUSA10679 Azayaka na Irodori no Naka de Kimi Rashiku
 }
 
 --[[
@@ -1210,186 +1209,95 @@ gadget_table = {
         }
 
     },
-	mikagami = {
+    azayaka = {
         gadgets = {
             ["ret"] = 0x4C,
 
-            ["pop rsp; ret"] = 0x942,
+            ["pop rsp; ret"] = 0x972,
             ["pop rbp; ret"] = 0x79,
-            ["pop rax; ret"] = 0x932,
-            ["pop rbx; ret"] = 0xCC655,
-            ["pop rcx; ret"] = 0xC05,
-            ["pop rdx; ret"] = 0x3EB6E7,
-            ["pop rdi; ret"] = 0xD2422,
-            ["pop rsi; ret"] = 0xDFA64,
-            ["pop r8; ret"] = 0x931,
+            ["pop rax; ret"] = 0x962,
+            ["pop rbx; ret"] = 0x558D3,
+            ["pop rcx; ret"] = 0xC35,
+            ["pop rdx; ret"] = 0x212562,
+            ["pop rdi; ret"] = 0x107090,
+            ["pop rsi; ret"] = 0x9C76E,
+            ["pop r8; ret"] = 0x961,
 
-            ["mov r9, rbx; call [rax + 8]"] = 0x14A6C0,
-            -- or
-            ["pop r13; pop r14; pop r15; ret"] = 0x1104BB,
-            ["mov r9, r13; call [rax + 8]"] = 0x136104,
+            ["mov r9, rbx; call [rax + 8]"] = 0x145A60,
 
-            ["mov [rax + 8], rcx; ret"] = 0x136080,
-            ["mov [rax + 0x28], rdx; ret"] = 0x1488DF,
-            ["mov [rcx + 0xa0], rdi; ret"] = 0xE5FBE,
-            ["mov r9, [rax + rsi + 0x18]; xor eax, eax; mov [r8], r9; ret"] = 0x117222,
-            ["add rax, r8; ret"] = 0x120AB6,	
+            ["mov [rax + 8], rcx; ret"] = 0x12C13F,
+            ["mov [rax + 0x28], rdx; ret"] = 0x143EDF,
+            ["mov [rcx + 0xa0], rdi; ret"] = 0xCB77E,
+            ["mov r9, [rax + rsi + 0x18]; xor eax, eax; mov [r8], r9; ret"] = nil,
+            ["add rax, r8; ret"] = 0x116856,
 
-            ["mov [rdi], rsi; ret"] = 0xD088F,
-            ["mov [rdi], rax; ret"] = 0xA3DB,
-            ["mov [rdi], eax; ret"] = 0xA3DC,
+            ["mov [rdi], rsi; ret"] = 0xCB94F,
+            ["mov [rdi], rax; ret"] = 0xA17B,
+            ["mov [rdi], eax; ret"] = 0xA17C,
 
-            ["add [rbx], eax; ret"] = 0x42555B,
+            ["add [rbx], eax; ret"] = 0x4099FF,
             -- or
             ["add [rbx], ecx; ret"] = nil,
             -- or
-            ["add [rbx], edi; ret"] = 0x403E23,
+            ["add [rbx], edi; ret"] = 0x3E6893,
 
-            ["mov rax, [rax]; ret"] = 0x200EB,
-            ["inc dword [rax]; ret"] = 0x193D1B,
+            ["mov rax, [rax]; ret"] = 0x1E1EB,
+            ["inc dword [rax]; ret"] = 0x18E7FB,
 
             -- branching specific gadgets
-            ["cmp [rax], ebx; ret"] = 0x406308,
-            ["sete al; ret"] = 0x590B5,
-            ["setne al; ret"] = 0x1E24E,
-            ["seta al; ret"] = 0x165E6E,
-            ["setb al; ret"] = 0x590D4,
+            ["cmp [rax], ebx; ret"] = 0x3E8D98,
+            ["sete al; ret"] = 0x558F5,
+            ["setne al; ret"] = 0x1C21E,
+            ["seta al; ret"] = 0x1613BE,
+            ["setb al; ret"] = 0x55914,
             ["setg al; ret"] = nil,
-            ["setl al; ret"] = 0xCABAA,
-            ["shl rax, cl; ret"] = 0xD52F1,
-            ["add rax, rcx; ret"] = 0x34F7E,
+            ["setl al; ret"] = 0xC5B4A,
+            ["shl rax, cl; ret"] = 0xD0163,
+            ["add rax, rcx; ret"] = 0x101E81,
 
             stack_pivot = {
-                ["mov esp, 0xfb0000bd; ret"] = 0x3B3C74, -- crash handler
-                ["mov esp, 0xf00000b9; ret"] = 0x3B99BC, -- native handler
+                ["mov esp, 0xfb0000bd; ret"] = 0x395F64, -- crash handler
+                ["mov esp, 0xf00000b9; ret"] = 0x39BCAC, -- native handler
             }
         },
         eboot_addrofs = {
-            fake_string = 0x4D415C, -- SCE_RELRO segment, use ptr as size for fake string
-            luaB_auxwrap = 0x19A560, -- to resolve eboot base
-            longjmp_import = 0x4EF6E8, -- to resolve libc base
+            fake_string = 0x4B4164, -- SCE_RELRO segment, use ptr as size for fake string
+            luaB_auxwrap = 0x194DC0, -- to resolve eboot base
+            strerror_import = 0x4CF618, -- to resolve libc base
 
-            luaL_optinteger = 0x197F70,
-            luaL_checklstring = 0x197B60,
-            lua_pushlstring = 0x195C60,
-            lua_pushinteger = 0x195C40,
+            luaL_optinteger = 0x192800,
+            luaL_checklstring = 0x1923F0,
+            lua_pushlstring = 0x190560,
+            lua_pushinteger = 0x190540,
 
-            luaL_newstate = 0x198EC0,
-            luaL_openlibs = 0x1A28C0,
-            lua_setfield = 0x196720,
-            luaL_loadstring = 0x198E50,
-            lua_pcall = 0x196DC0,
-            lua_pushcclosure = 0x1973B0,
-            lua_tolstring = 0x1953A0,
-            lua_pushstring = 0x195CC0,
+            luaL_newstate = 0x193710,
+            luaL_openlibs = 0x19D350,
+            lua_setfield = 0x191030,
+            luaL_loadstring = 0x1936A0,
+            lua_pcall = 0x1916C0,
+            lua_pushcclosure = 0x190770,
+            lua_tolstring = 0x18FD60,
+            lua_pushstring = 0x1905C0,
         },
         libc_addrofs = {
-            calloc = 0x22090,
-            memcpy = 0x18590,
-            setjmp = 0x7F660,
-            longjmp = 0x7F6B0,
-            strerror = 0xCDA0,
-            error = 0x13E,
-            sceKernelGetModuleInfoFromAddr = 0x568,
-            gettimeofday_import = 0xefd10, -- syscall wrapper
+            calloc = 0x5E2E0,
+            memcpy = 0x54A60,
+            setjmp = 0x71AD0,
+            longjmp = 0x71B20,
+            strerror = 0x49020,
+            error = 0x148,
+            sceKernelGetModuleInfoFromAddr = 0x548,
+            gettimeofday_import = 0xDBD60,
 
-            Thrd_join = 0x21520,
-            Thrd_exit = 0x215A0,
-            Thrd_create = 0x216B0,
+            Thrd_join = 0x5DA90,
+            Thrd_exit = 0x5DB10,
+            Thrd_create = 0x5DC20,
 
-            Mtx_init = 0x21940,
-            Mtx_lock = 0x219D0,
-            Mtx_unlock = 0x219C0,
+            Mtx_init = 0x43CF0,
+            Mtx_lock = 0x43E10,
+            Mtx_unlock = 0x43DB0,
 
-            Atomic_fetch_add_8 = 0xE0C0,
-        }
-    },
-	summer_surprise = {
-        gadgets = {
-            ["ret"] = 0x4c,
-            
-            ["pop rsp; ret"] = 0xa02,
-            ["pop rbp; ret"] = 0x79,
-            ["pop rax; ret"] = 0x9f2,
-            ["pop rbx; ret"] = 0x5d436,
-            ["pop rcx; ret"] = 0x143af,
-            ["pop rdx; ret"] = 0x3d20e7,
-            ["pop rdi; ret"] = 0xcd77e,
-            ["pop rsi; ret"] = 0x10d92d,
-            ["pop r8; ret"] = 0x9f1,
-            ["mov r9, rbx; call [rax + 8]"] = nil,
-            ["pop r13; pop r14; pop r15; ret"] = 0x1150f3,
-            ["mov r9, r13; call [rax + 8]"] = 0x13b504,
-            
-            ["mov [rax + 8], rcx; ret"] = 0x13b48a,
-            ["mov [rax + 0x28], rdx; ret"] = 0x14e21f,
-            ["mov [rcx + 0xa0], rdi; ret"] = 0xd6a8e,
-            ["mov r9, [rax + rsi + 0x18]; xor eax, eax; mov [r8], r9; ret"] = 0x11bea2,
-            ["add rax, r8; ret"] = 0xa083,
-            
-            ["mov [rdi], rsi; ret"] = 0xd6c4f,
-            ["mov [rdi], rax; ret"] = 0x95bbb,
-            ["mov [rdi], eax; ret"] = 0x95bbc,
-            ["add [rbx], eax; ret"] = nil,
-            ["add [rbx], ecx; ret"] = nil,
-            ["add [rbx], edi; ret"] = 0x3eb1d3,
-            ["mov rax, [rax]; ret"] = 0x1fcdb,
-            ["inc dword [rax]; ret"] = 0x1a694b,
-            
-            -- branching specific gadgets
-            ["cmp [rax], ebx; ret"] = 0x3ed708,
-            ["sete al; ret"] = 0x52d27,
-            ["setne al; ret"] = 0x50f,
-            ["seta al; ret"] = 0x16c67e,
-            ["setb al; ret"] = 0x5d4b4,
-            ["setg al; ret"] = nil,
-            ["setl al; ret"] = 0xd103a,
-            ["shl rax, cl; ret"] = 0xdb312,
-            ["add rax, rcx; ret"] = 0x3582e,
-            
-            stack_pivot = {
-                ["mov esp, 0xfb0000bd; ret"] = 0x39b744, -- crash handler
-                ["mov esp, 0xf00000b9; ret"] = 0x3a148c, -- native handler
-            }
-        },
-        eboot_addrofs = {
-            fake_string = 0x600164, -- SCE_RELRO segment, use ptr as size for fake string
-            luaB_auxwrap = 0x1ad170, -- to resolve eboot base
-            longjmp_import = 0x619160, -- to resolve libc base
-            
-            luaL_optinteger = 0x1aaba0,
-            luaL_checklstring = 0x1aa790,
-            lua_pushlstring = 0x1a88b0,
-            lua_pushinteger = 0x1a8890,
-            
-            luaL_newstate = 0x1abab0,
-            luaL_openlibs = 0x1b5b00,
-            lua_setfield = 0x1a9370,
-            luaL_loadstring = 0x1aba40,
-            lua_pcall = 0x1a9a00,
-            lua_pushcclosure = 0x1a8ac0,
-            lua_tolstring = 0x1a7fc0,
-            lua_pushstring = 0x1a8910,
-        },
-        libc_addrofs = {
-            calloc = 0x4e910,
-            memcpy = 0x44150,
-            setjmp = 0xb2d60,
-            longjmp = 0xb2db0,
-            strerror = 0x38340,
-            error = 0x168,
-            sceKernelGetModuleInfoFromAddr = 0x198,
-            gettimeofday_import = 0x11ba78, -- syscall wrapper
-            
-            Thrd_join = 0x4dd20,
-            Thrd_exit = 0x4dda0,
-            Thrd_create = 0x4df20,
-
-            Mtx_init = 0x4e1a0,
-            Mtx_lock = 0x4e230,
-            Mtx_unlock = 0x4e220,
-
-            Atomic_fetch_add_8 = 0x39800,
+            Atomic_fetch_add_8 = 0x4A340,
         }
     },
 }
